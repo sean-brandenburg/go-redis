@@ -21,23 +21,23 @@ func main() {
 	}
 	defer clientConn.Close()
 
-	data := make([]byte, 128)
-	bytesRead, err := clientConn.Read(data)
-	if err != nil {
-		fmt.Println("Error reading from client connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		data := make([]byte, 128)
+		bytesRead, err := clientConn.Read(data)
+		if err != nil {
+			fmt.Println("Error reading from client connection: ", err.Error())
+			os.Exit(1)
+		}
+		
+		fmt.Printf("Read %d bytes: \n", bytesRead)
+		fmt.Println("Received message: ", string(data[:bytesRead]))
 	
-	fmt.Printf("Read %d bytes: \n", bytesRead)
-	fmt.Println("Received message: ", string(data[:bytesRead]))
-
-	respString := "+PONG\r\n"
-	// for range 2 {
+		respString := "+PONG\r\n"
 		fmt.Println("Writing message: ", respString)
 		_, err = clientConn.Write([]byte(respString))
 		if err != nil {
 			fmt.Println("Error writing response to client", err.Error())
 			os.Exit(1)
 		}
-	// }
+	}
 }
