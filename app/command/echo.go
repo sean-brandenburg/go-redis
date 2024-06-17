@@ -24,15 +24,10 @@ func ToEcho(data []string) (Echo, error) {
 		return Echo{}, fmt.Errorf("Expected 2 data entries to follow echo command but got %d entries: %v", len(data), data)
 	}
 
-	dataLen, err := parseIntWithPrefix(data[0], "$")
+	err := validateLengthDataPair(data[0], data[1])
 	if err != nil {
-		return Echo{}, err
+		return Echo{}, fmt.Errorf("Error creating echo from command: %w", err)
 	}
 
-	echoData := data[1]
-	if dataLen != len(echoData) {
-		return Echo{}, fmt.Errorf("Expected data to be of length %d, but it had length %d: %q", dataLen, len(echoData), echoData)
-	}
-
-	return Echo{echoData}, nil
+	return Echo{data[1]}, nil
 }

@@ -9,8 +9,6 @@ import (
 
 type Command interface {
 	String() string
-
-	// ExecuteCommand
 	ExecuteCommand(net.Conn) error
 }
 
@@ -21,7 +19,7 @@ const (
 	echoCmd CommandType = "echo"
 )
 
-const delimeter =  "\r\n"
+const delimeter = "\r\n"
 
 func ParseCommand(cmd string) (Command, error) {
 	cmdStrs := strings.Split(
@@ -84,11 +82,3 @@ func validateLengthDataPair(lengthStr string, dataStr string) error {
 	}
 	return nil
 }
-
-/*
-	*2
-	$4
-	ECHO
-	$3
-	hey
-*/
