@@ -7,6 +7,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var noOpLogger = zap.NewNop()
+
 type Logger struct {
 	zap *zap.Logger
 }
@@ -26,9 +28,12 @@ func NewLogger(logFile string, level zapcore.Level) (*Logger, error) {
 	}
 	return &Logger{zap: logger}, err
 }
+func NewTestLogger() Logger {
+	return Logger{zap: noOpLogger}
+}
 
 func (l *Logger) Close() {
-    l.zap.Sync()
+	l.zap.Sync()
 }
 
 func (l Logger) Debug(msg string, fields ...zap.Field) {
@@ -51,12 +56,9 @@ func (l Logger) Fatal(msg string, fields ...zap.Field) {
 	l.writer().Warn(msg, fields...)
 }
 
-var noOpLogger = zap.NewNop()
-
 func (l Logger) writer() *zap.Logger {
-    // If we don't have a logger, initialize a no-op logger. This can be useful for avoiding panics during testing
+	// If we don't have a logger, initialize a no-op logger. This can be useful for avoiding panics during testing
 	if l.zap == nil {
-        fmt.Println("WARNING: Using no-op zap logger")
 		return noOpLogger
 	}
 	return l.zap

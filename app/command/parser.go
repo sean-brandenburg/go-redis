@@ -33,9 +33,6 @@ func NewParser(cmd string, logger log.Logger) (CommandParser, error) {
 	}, nil
 }
 
-// TODO: I've messed this up. This needs to be restructured so that each time we want to parse an element we should
-// 1. Read in the size parameter and consume it's delimiter string
-// 2. Consume the specified number of characters and process it + consume delimiter
 func (parser *CommandParser) Parse() (Command, error) {
 	parsedArray, err := parser.parseArray()
 	if err != nil {
@@ -129,8 +126,6 @@ func (parser CommandParser) remainingTokens() int {
 	return len(parser.tokens) - parser.curIdx
 }
 
-// TODO: Need to figure out how I want to structure these. I think each of these should take in the token to parse rather than calling popNextToken?
-// not super sure how this would work for things that need to read multiple tokens. I guess they would assume the curIdx is still on the first token and call getNext as needed
 func (parser *CommandParser) parseInt() (int, error) {
 	token, err := parser.popNextToken()
 	if err != nil {
@@ -141,8 +136,6 @@ func (parser *CommandParser) parseInt() (int, error) {
 	return parsedInt, err
 }
 
-// TODO: This function definitely has an edge case for data that contains the delimiter. To fix this I'll need to restructure this so that we don't initially split
-// by the delimeter and instead consume chars from the string as we go (consuming the appropriate ammount for the bulk string size)
 func (parser *CommandParser) parseBulkString() (string, error) {
 	lengthToken, err := parser.popNextToken()
 	if err != nil {
@@ -150,14 +143,26 @@ func (parser *CommandParser) parseBulkString() (string, error) {
 	}
 	dataToken, err := parser.popNextToken()
 	if err != nil {
-		return "", fmt.Errorf("error data from bulk string: %w", err)
+		return "", fmt.Errorf("error getting next token from bulk string: %w", err)
 	}
 
 	length, err := parseIntWithPrefix(lengthToken, "$")
 	if err != nil {
 		return "", err
 	}
-	if length != len(dataToken) {
+
+	// If the length of the data is less than the expected length, it's possible we split at a delimiter that was part 
+	// of the string so add it back and add the next element until we have reached or exceeded the size
+	for len(dataToken) < length  {
+		additionalData, err := parser.popNextToken()
+		if err != nil {
+			// There was some data, but not enough to make the full length string
+			return "", fmt.Errorf("length of %d does not match the length of the provided data %q", length, dataToken)
+		}
+		dataToken = fmt.Sprint(dataToken, Delimeter, additionalData)
+	}
+
+	if len(dataToken) > length {
 		return "", fmt.Errorf("length of %d does not match the length of the provided data %q", length, dataToken)
 	}
 
