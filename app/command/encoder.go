@@ -38,7 +38,7 @@ func encodePrimitive(data any) (string, error) {
 	var result string
 	var err error
 	switch typedData := data.(type) {
-	case int64:
+	case int:
 		result, err = encodeInt(typedData)
 	case string:
 		result, err = encodeString(typedData)
@@ -49,10 +49,10 @@ func encodePrimitive(data any) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s%s", result, Delimeter), nil
+	return fmt.Sprint(result, Delimeter), nil
 }
 
-func encodeInt(data int64) (string, error) {
+func encodeInt(data int) (string, error) {
 	return fmt.Sprintf(":%d", data), nil
 }
 

@@ -28,7 +28,7 @@ func NewLogger(logFile string, level zapcore.Level) (*Logger, error) {
 	}
 	return &Logger{zap: logger}, err
 }
-func NewTestLogger() Logger {
+func NewNoOpLogger() Logger {
 	return Logger{zap: noOpLogger}
 }
 

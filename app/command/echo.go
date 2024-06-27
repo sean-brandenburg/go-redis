@@ -12,7 +12,7 @@ func (echo Echo) String() string {
 	return fmt.Sprintf("ECHO: %q", echo.Payload)
 }
 
-func ToEcho(data []any) (Echo, error) {
+func toEcho(data []any) (Echo, error) {
 	if len(data) != 1 {
 		return Echo{}, fmt.Errorf("expected only one data element for ping command, but found %d: %v", len(data), data)
 	}

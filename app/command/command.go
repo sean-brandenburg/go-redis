@@ -34,13 +34,13 @@ func ToCommand(data []any) (Command, error) {
 
 	switch CommandType(cmdType) {
 	case pingCmd:
-		return ToPing(cmdData)
+		return toPing(cmdData)
 	case echoCmd:
-		return ToEcho(cmdData)
+		return toEcho(cmdData)
 	case getCmd:
-		return ToGet(cmdData)
+		return toGet(cmdData)
 	case setCmd:
-		return ToSet(cmdData)
+		return toSet(cmdData)
 	default:
 	}
 

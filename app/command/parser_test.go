@@ -127,8 +127,7 @@ func TestParse(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmd), func(t *testing.T) {
-			// TODO: Should probably make a test logger helper function
-			parser, err := NewParser(tc.rawCmdString, log.NewTestLogger())
+			parser, err := NewParser(tc.rawCmdString, log.NewNoOpLogger())
 			assert.Nil(t, err)
 
 			cmd, err := parser.Parse()

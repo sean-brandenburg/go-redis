@@ -13,7 +13,7 @@ func (set Set) String() string {
 	return fmt.Sprintf("SET: %q -> %v", set.KeyPayload, set.ValuePayload)
 }
 
-func ToSet(data []any) (Set, error) {
+func toSet(data []any) (Set, error) {
 	if len(data) != 2 {
 		return Set{}, fmt.Errorf("expected 1 key and 1 value entry to follow SET command but got %d entries: %v", len(data), data)
 	}

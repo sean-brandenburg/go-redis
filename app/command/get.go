@@ -12,7 +12,7 @@ func (get Get) String() string {
 	return fmt.Sprintf("GET: %q", get.Payload)
 }
 
-func ToGet(data []any) (Get, error) {
+func toGet(data []any) (Get, error) {
 	if len(data) != 1 {
 		return Get{}, fmt.Errorf("expected 1 key entry to follow get command but got %d entries: %v", len(data), data)
 	}
