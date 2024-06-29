@@ -71,7 +71,8 @@ func (s *SlaveServer) Run(ctx context.Context) error {
 			return executeCommand(s, cmd)
 		},
 	)
-	s.BaseServer.Run(ctx)
+	go s.ConnectionHandler(ctx)
+	go s.ExpiryLoop(ctx)
 
 	return nil
 }

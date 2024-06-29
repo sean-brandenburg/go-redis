@@ -68,8 +68,5 @@ func (s *BaseServer) NodeType() string {
 }
 
 func (s *BaseServer) Run(ctx context.Context) error {
-	go s.ConnectionHandler(ctx)
-	go s.ExpiryLoop(ctx)
-
-	return nil
+	return fmt.Errorf("the base server's run should not be used and exists only to fulfill the Server interface to simplify testing")
 }
