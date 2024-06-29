@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"os"
@@ -15,7 +16,13 @@ import (
 )
 
 func main() {
-	port := flag.Int64("port", 6379, "specify the port that this reddis instance will listen on")
+	port := flag.Int("port", 6379, "specify the port that this reddis instance will listen on")
+
+	var replicaof string
+	flag.StringVar(&replicaof, "replicaof", "", "specify the hostname and port that this instance should be a replica of")
+	// This flag may be formatted as "hostname port" so we need to turn this into an actual address
+	replicaof = strings.ReplaceAll(replicaof, " ", ":")
+
 	flag.Parse()
 
 	logger, err := log.NewLogger("", zapcore.InfoLevel)
@@ -24,7 +31,10 @@ func main() {
 	}
 	defer logger.Close()
 
-	server, err := server.NewServer(*logger, *port)
+	server, err := server.NewServer(*logger, &server.ServerOptions{
+		Port:      port,
+		ReplicaOf: &replicaof,
+	})
 	if err != nil {
 		logger.Fatal("failed to initialize server", zap.Error(err))
 	}

@@ -32,21 +32,42 @@ type Server struct {
 	storeData   map[string]storeValue
 	storeDataMu *sync.Mutex
 
+	// masterAddress contains the address of the master node if this is a slave node
+	// otherwise this node is a master node
+	masterAddress string
+
 	Logger log.Logger
 }
 
-func NewServer(logger log.Logger, port int64) (Server, error) {
+type ServerOptions struct {
+	Port      *int
+	ReplicaOf *string
+}
+
+func NewServer(logger log.Logger, opts *ServerOptions) (Server, error) {
+	port := 6379
+	masterAddress := ""
+	if opts != nil {
+		if opts.Port != nil {
+			port = *opts.Port
+		}
+		if opts.ReplicaOf != nil {
+			masterAddress = *opts.ReplicaOf
+		}
+	}
+
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		return Server{}, fmt.Errorf("failed to bind to port %d: %w", port, err)
 	}
 
 	return Server{
-		eventQueue:  make(chan Event, eventQueueSize),
-		listener:    listener,
-		Logger:      logger,
-		storeData:   make(map[string]storeValue),
-		storeDataMu: &sync.Mutex{},
+		eventQueue:    make(chan Event, eventQueueSize),
+		listener:      listener,
+		Logger:        logger,
+		storeData:     make(map[string]storeValue),
+		masterAddress: masterAddress,
+		storeDataMu:   &sync.Mutex{},
 	}, nil
 }
 
@@ -194,6 +215,10 @@ func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 func (s Server) getInfo(infoType string) (map[string]string, error) {
 	if infoType != "replication" {
 		return nil, fmt.Errorf("received unexpected info type %q", infoType)
+	}
+
+	if s.masterAddress != "" {
+		return map[string]string{"role": "slave"}, nil
 	}
 	return map[string]string{"role": "master"}, nil
 }
