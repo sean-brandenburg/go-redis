@@ -9,10 +9,41 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestParseSimpleString(t *testing.T) {
+	for _, tc := range []struct {
+		input          string
+		expectedOutput string
+	}{
+		{
+			input:          "+",
+			expectedOutput: "",
+		},
+		{
+			input:          "+0",
+			expectedOutput: "0",
+		},
+		{
+			input:          "+abc",
+			expectedOutput: "abc",
+		},
+		{
+			input:          "++++++",
+			expectedOutput: "+++++",
+		},
+	} {
+		t.Run(fmt.Sprintf("input %q should parse to string %q", tc.input, tc.expectedOutput), func(t *testing.T) {
+			parser := CommandParser{tokens: []string{tc.input}}
+			res, err := parser.parseSimpleString()
+			assert.Nil(t, err)
+			assert.Equal(t, res, tc.expectedOutput)
+		})
+	}
+}
+
 func TestParseInt(t *testing.T) {
 	for _, tc := range []struct {
 		input          string
-		expectedOutput int
+		expectedOutput int64
 	}{
 		{
 			input:          ":0",
@@ -28,11 +59,11 @@ func TestParseInt(t *testing.T) {
 		},
 		{
 			input:          fmt.Sprintf(":%d", math.MaxInt),
-			expectedOutput: math.MaxInt,
+			expectedOutput: math.MaxInt64,
 		},
 		{
 			input:          fmt.Sprintf(":%d", math.MinInt),
-			expectedOutput: math.MinInt,
+			expectedOutput: math.MinInt64,
 		},
 	} {
 		t.Run(fmt.Sprintf("input %q should parse to int %d", tc.input, tc.expectedOutput), func(t *testing.T) {
@@ -88,11 +119,16 @@ func TestParseArray(t *testing.T) {
 		},
 		{
 			input:          []string{"*1", ":1"},
-			expectedOutput: []any{1},
+			expectedOutput: []any{int64(1)},
 		},
 		{
 			input:          []string{"*2", "$4", "ECHO", "$4", "test"},
 			expectedOutput: []any{"ECHO", "test"},
+		},
+		// Nested Array
+		{
+			input:          []string{"*2", "$1", "1", "*2", "$1", "2", "$1", "3"},
+			expectedOutput: []any{"1", []any{"2", "3"}},
 		},
 	} {
 		t.Run(fmt.Sprintf("input %q should parse to array %q", tc.input, tc.expectedOutput), func(t *testing.T) {
@@ -122,6 +158,10 @@ func TestParse(t *testing.T) {
 			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow"},
 		},
 		{
+			rawCmdString: "*5\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n$2\r\npx\r\n$3\r\n100\r\n",
+			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTime: int64(100)},
+		},
+		{
 			rawCmdString: "*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",
 			expectedCmd:  Get{Payload: "banana"},
 		},
@@ -132,7 +172,7 @@ func TestParse(t *testing.T) {
 
 			cmd, err := parser.Parse()
 			assert.Nil(t, err)
-			assert.Equal(t, cmd, tc.expectedCmd)
+			assert.Equal(t, tc.expectedCmd, cmd)
 		})
 	}
 }

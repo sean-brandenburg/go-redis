@@ -2,30 +2,68 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 	"go.uber.org/zap"
 )
 
-type Server struct {
-	Logger   log.Logger
-	Events   chan Event
-	Listener net.Listener
+const (
+	// How often we should check in the background for expired keys
+	expiryThreadPeriod = 10 * time.Second
 
-	// StoreData is a map containing the keys and values held by this store
-	StoreData map[string]any
+	// How many keys we should check per expiry check
+	samplesPerExpiry = 100
+
+	// The size of the event queue. Note that a smaller number here can be used
+	// in order to apply backpressure on the connectionHandlers
+	eventQueueSize = 10
+)
+
+type Server struct {
+	eventQueue chan Event
+	listener   net.Listener
+
+	// storeData is a map containing the keys and values held by this store
+	storeData   map[string]storeValue
+	storeDataMu *sync.Mutex
+
+	Logger log.Logger
+}
+
+func NewServer(logger log.Logger) (Server, error) {
+	listener, err := net.Listen("tcp", "0.0.0.0:6379")
+	if err != nil {
+		return Server{}, fmt.Errorf("failed to bind to port 6379: %w", err)
+	}
+
+	return Server{
+		eventQueue:  make(chan Event, eventQueueSize),
+		listener:    listener,
+		Logger:      logger,
+		storeData:   make(map[string]storeValue),
+		storeDataMu: &sync.Mutex{},
+	}, nil
 }
 
 func (s Server) EventLoop(ctx context.Context) {
-	s.Logger.Info("started event loop")
+	s.Logger.Info("starting event loop")
 	for {
 		select {
 		case <-ctx.Done():
 			s.Logger.Error("event loop exiting", zap.Error(ctx.Err()))
 			return
-		case event := <-s.Events:
+		case event := <-s.eventQueue:
+			s.Logger.Info(
+				"processing event",
+				zap.String("command", event.Command),
+				zap.Stringer("remoteAddress", event.ClientConn.RemoteAddr()),
+			)
+
 			parser, err := command.NewParser(event.Command, s.Logger)
 			if err != nil {
 				s.Logger.Error("error building parser from client command", zap.Error(err))
@@ -45,7 +83,11 @@ func (s Server) EventLoop(ctx context.Context) {
 				continue
 			}
 
-			s.Logger.Info("sending response to client", zap.String("response", responseStr))
+			s.Logger.Info(
+				"sending response to client",
+				zap.String("response", responseStr),
+				zap.Stringer("remoteAddr", event.ClientConn.RemoteAddr()),
+			)
 			_, err = event.ClientConn.Write([]byte(responseStr))
 			if err != nil {
 				s.Logger.Error("error writing response to client", zap.Error(err), zap.String("response", responseStr))
@@ -55,8 +97,48 @@ func (s Server) EventLoop(ctx context.Context) {
 	}
 }
 
+// ExpiryLoop will check a random sampling of at most `samplesPerExpiry` keys in the server's store to
+// see if they are expired. Any found expired keys are deleted from the store
+func (s Server) ExpiryLoop(ctx context.Context) {
+	s.Logger.Info("starting expiry loop")
+	for {
+		select {
+		case <-ctx.Done():
+			s.Logger.Error("event loop exiting", zap.Error(ctx.Err()))
+			return
+		case <-time.After(expiryThreadPeriod):
+			s.storeDataMu.Lock()
+
+			// NOTE: Map itterations in go are pseudo-random so
+			// there's no need to explictly randomize this itteration
+			inspectedKeys := int64(0)
+			expiredKeys := int64(0)
+			for key, value := range s.storeData {
+				inspectedKeys++
+				if value.isExpired() {
+					expiredKeys++
+					s.Logger.Debug(fmt.Sprintf("expiry loop deleting expired key %q", key))
+					delete(s.storeData, key)
+				}
+
+				if inspectedKeys > samplesPerExpiry {
+					break
+				}
+			}
+			s.storeDataMu.Unlock()
+
+			s.Logger.Info(
+				"expiry loop completed a run",
+				zap.Int64("inspectedKeys", inspectedKeys),
+				zap.Int64("expiredKeys", expiredKeys),
+			)
+		}
+	}
+}
+
+// ConnectionHandler listens for new pending connections and starts up a clientHandler goroutine for each new connection
 func (s Server) ConnectionHandler(ctx context.Context) {
-	s.Logger.Info("started connection handler")
+	s.Logger.Info("starting connection handler")
 	for {
 		select {
 		case <-ctx.Done():
@@ -65,7 +147,7 @@ func (s Server) ConnectionHandler(ctx context.Context) {
 		default:
 		}
 
-		clientConn, err := s.Listener.Accept()
+		clientConn, err := s.listener.Accept()
 		if err != nil {
 			s.Logger.Error("error accepting connection", zap.Error(err))
 			continue
@@ -75,8 +157,14 @@ func (s Server) ConnectionHandler(ctx context.Context) {
 	}
 }
 
+// clienHandler is responsible for reading messages off of a connection and turning them into events
+// which are then placedon the event queue
 func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
+	s.Logger.Info(
+		"starting client handler",
+		zap.Stringer("remoteAddress", conn.RemoteAddr()),
+	)
 
 	for {
 		select {
@@ -96,7 +184,7 @@ func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 		command := string(data[:bytesRead])
 		s.Logger.Info("received command", zap.String("command", command))
 
-		s.Events <- Event{
+		s.eventQueue <- Event{
 			Command:    command,
 			ClientConn: conn,
 		}

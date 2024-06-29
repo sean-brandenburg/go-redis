@@ -60,7 +60,7 @@ func (parser *CommandParser) parseNext() (any, error) {
 
 	switch []rune(token)[0] {
 	case '+':
-		return nil, errors.New("TODO: Implement parser.parseSimpleString()")
+		return parser.parseSimpleString()
 	case '-':
 		return nil, errors.New("TODO: Implement parser.parseSimpleError()")
 	case ':':
@@ -126,7 +126,20 @@ func (parser CommandParser) remainingTokens() int {
 	return len(parser.tokens) - parser.curIdx
 }
 
-func (parser *CommandParser) parseInt() (int, error) {
+func (parser *CommandParser) parseSimpleString() (string, error) {
+	token, err := parser.popNextToken()
+	if err != nil {
+		return "", fmt.Errorf("error getting next token while parsing simple string: %w", err)
+	}
+	parsedString, ok := strings.CutPrefix(token, "+")
+	if !ok {
+		return "", fmt.Errorf("next token did not have the expected prefix '+' while parsing simple string: %w", err)
+	}
+
+	return parsedString, err
+}
+
+func (parser *CommandParser) parseInt() (int64, error) {
 	token, err := parser.popNextToken()
 	if err != nil {
 		return 0, fmt.Errorf("error parsing integer: %w", err)
@@ -151,9 +164,9 @@ func (parser *CommandParser) parseBulkString() (string, error) {
 		return "", err
 	}
 
-	// If the length of the data is less than the expected length, it's possible we split at a delimiter that was part 
+	// If the length of the data is less than the expected length, it's possible we split at a delimiter that was part
 	// of the string so add it back and add the next element until we have reached or exceeded the size
-	for len(dataToken) < length  {
+	for int64(len(dataToken)) < length {
 		additionalData, err := parser.popNextToken()
 		if err != nil {
 			// There was some data, but not enough to make the full length string
@@ -162,7 +175,7 @@ func (parser *CommandParser) parseBulkString() (string, error) {
 		dataToken = fmt.Sprint(dataToken, Delimeter, additionalData)
 	}
 
-	if len(dataToken) > length {
+	if int64(len(dataToken)) > length {
 		return "", fmt.Errorf("length of %d does not match the length of the provided data %q", length, dataToken)
 	}
 

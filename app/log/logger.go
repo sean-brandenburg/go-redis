@@ -13,6 +13,8 @@ type Logger struct {
 	zap *zap.Logger
 }
 
+// TODO: Would be nice to make a clone function so that we can clone this logger then attach zap fields to it
+
 func NewLogger(logFile string, level zapcore.Level) (*Logger, error) {
 	config := zap.NewProductionConfig()
 	config.Level.SetLevel(level)

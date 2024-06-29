@@ -38,7 +38,7 @@ func (s Server) executeEcho(echo command.Echo) (string, error) {
 }
 
 func (s Server) executeGet(get command.Get) (string, error) {
-	data, ok := s.StoreData[get.Payload]
+	data, ok := s.Get(get.Payload)
 	if !ok {
 		return command.NullBulkString, nil
 	}
@@ -51,11 +51,10 @@ func (s Server) executeGet(get command.Get) (string, error) {
 }
 
 func (s Server) executeSet(set command.Set) (string, error) {
-	s.StoreData[set.KeyPayload] = set.ValuePayload
-
+	s.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTime)
 	res, err := command.Encode("OK")
 	if err != nil {
-		return "", fmt.Errorf("error encoding response for PING command: %w", err)
+		return "", fmt.Errorf("error encoding response for SET command: %w", err)
 	}
 	return res, nil
 }

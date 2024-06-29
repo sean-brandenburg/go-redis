@@ -5,7 +5,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"net"
 	"os"
 
 	"github.com/codecrafters-io/redis-starter-go/app/log"
@@ -15,27 +14,22 @@ import (
 )
 
 func main() {
-	logger, err := log.NewLogger("", zapcore.DebugLevel)
+	logger, err := log.NewLogger("", zapcore.InfoLevel)
 	if err != nil {
 		logger.Fatal("failed to initialize logger", zap.Error(err))
 	}
 	defer logger.Close()
 
-	listener, err := net.Listen("tcp", "0.0.0.0:6379")
+	server, err := server.NewServer(*logger)
 	if err != nil {
-		logger.Fatal("failed to bind to port 6379", zap.Error(err))
-	}
-	server := server.Server{
-		Events:   make(chan server.Event),
-		Listener: listener,
-		Logger:   *logger,
-		StoreData: make(map[string]any),
+		logger.Fatal("failed to initialize server", zap.Error(err))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	go server.EventLoop(ctx)
 	go server.ConnectionHandler(ctx)
+	go server.ExpiryLoop(ctx)
 
 	sigShutdown := make(chan os.Signal, 1)
 	signal.Notify(sigShutdown, syscall.SIGTERM, syscall.SIGINT)

@@ -17,6 +17,15 @@ func Encode(data any) (string, error) {
 	}
 }
 
+// MustEncode calls encode, but panics if the error is not nil
+func MustEncode(data any) string {
+	res, err := Encode(data)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
 func encodeArray(arrayData []any) (string, error) {
 	builder := strings.Builder{}
 
@@ -27,9 +36,7 @@ func encodeArray(arrayData []any) (string, error) {
 			return "", fmt.Errorf("failed to encode list element: %w", err)
 		}
 		builder.WriteString(res)
-		builder.WriteString(Delimeter)
 	}
-	builder.WriteString(Delimeter)
 
 	return builder.String(), nil
 }
@@ -42,6 +49,8 @@ func encodePrimitive(data any) (string, error) {
 		result, err = encodeInt(typedData)
 	case string:
 		result, err = encodeString(typedData)
+	case bool:
+		result, err = encodeBool(typedData)
 	default:
 		return "", fmt.Errorf("tried to encode primitive data of an unknown type %[1]T: %[1]v", data)
 	}
@@ -58,6 +67,14 @@ func encodeInt(data int) (string, error) {
 
 func encodeString(data string) (string, error) {
 	return fmt.Sprintf("+%s", data), nil
+}
+
+// TODO: Check that this is the correct format
+func encodeBool(data bool) (string, error) {
+	if data {
+		return "#true", nil
+	}
+	return "#false", nil
 }
 
 //  case '+':
