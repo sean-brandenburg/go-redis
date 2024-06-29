@@ -11,11 +11,11 @@ type Set struct {
 	ValuePayload any
 
 	// Set a lifetime for the existence of this key value
-	ExpiryTime int64
+	ExpiryTimeMs int64
 }
 
 func (set Set) String() string {
-	return fmt.Sprintf("SET: (%q -> %v) with expiration %d", set.KeyPayload, set.ValuePayload, set.ExpiryTime)
+	return fmt.Sprintf("SET: (%q -> %v) with expiration %d", set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
 }
 
 // TODO: Should clean up this function
@@ -56,6 +56,6 @@ func toSet(data []any) (Set, error) {
 	return Set{
 		KeyPayload:   key,
 		ValuePayload: data[1],
-		ExpiryTime:   timeout,
+		ExpiryTimeMs: timeout,
 	}, nil
 }

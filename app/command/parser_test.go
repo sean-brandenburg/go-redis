@@ -146,20 +146,22 @@ func TestParse(t *testing.T) {
 		expectedCmd  Command
 	}{
 		{
-			rawCmdString: "*2\r\n$4\r\nECHO\r\n$4\r\ntest\r\n",
-			expectedCmd:  Echo{Payload: "test"},
+			// NOTE: This test also checks for the case insensitivity of command parsing
+			rawCmdString: "*1\r\n$4\r\nPiNg\r\n",
+			expectedCmd:  Ping{},
 		},
 		{
-			rawCmdString: "*1\r\n$4\r\nPING\r\n",
-			expectedCmd:  Ping{},
+			rawCmdString: "*2\r\n$4\r\nECHO\r\n$4\r\ntest\r\n",
+			expectedCmd:  Echo{Payload: "test"},
 		},
 		{
 			rawCmdString: "*3\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n",
 			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow"},
 		},
 		{
-			rawCmdString: "*5\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n$2\r\npx\r\n$3\r\n100\r\n",
-			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTime: int64(100)},
+			// NOTE: This also checks that px is case insensitive
+			rawCmdString: "*5\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n$2\r\npX\r\n$3\r\n100\r\n",
+			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTimeMs: int64(100)},
 		},
 		{
 			rawCmdString: "*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",

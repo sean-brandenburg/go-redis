@@ -179,7 +179,7 @@ func TestExecuteSet(t *testing.T) {
 		res, err := server.executeSet(command.Set{
 			KeyPayload:   "a",
 			ValuePayload: "b",
-			ExpiryTime:   10000,
+			ExpiryTimeMs: 10000,
 		})
 		assert.Nil(t, err)
 		assert.Equal(t, "+OK\r\n", res)

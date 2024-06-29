@@ -51,7 +51,7 @@ func (s Server) executeGet(get command.Get) (string, error) {
 }
 
 func (s Server) executeSet(set command.Set) (string, error) {
-	s.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTime)
+	s.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
 	res, err := command.Encode("OK")
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for SET command: %w", err)

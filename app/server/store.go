@@ -14,18 +14,18 @@ func (v storeValue) isExpired() bool {
 	return v.expiresAt != nil && v.expiresAt.Before(time.Now())
 }
 
-func (s *Server) Set(key string, value any, timeout int64) {
+func (s *Server) Set(key string, value any, expiryTimeMs int64) {
 	s.storeDataMu.Lock()
 	defer s.storeDataMu.Unlock()
 
-	if timeout == 0 {
+	if expiryTimeMs == 0 {
 		s.storeData[key] = storeValue{
 			data: value,
 		}
 		return
 	}
 
-	expiryTime := time.Now().Add(time.Duration(timeout) * time.Second)
+	expiryTime := time.Now().Add(time.Duration(expiryTimeMs) * time.Millisecond)
 	s.storeData[key] = storeValue{
 		data:      value,
 		expiresAt: &expiryTime,
