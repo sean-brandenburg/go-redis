@@ -35,10 +35,10 @@ type Server struct {
 	Logger log.Logger
 }
 
-func NewServer(logger log.Logger) (Server, error) {
-	listener, err := net.Listen("tcp", "0.0.0.0:6379")
+func NewServer(logger log.Logger, port int64) (Server, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
-		return Server{}, fmt.Errorf("failed to bind to port 6379: %w", err)
+		return Server{}, fmt.Errorf("failed to bind to port %d: %w", port, err)
 	}
 
 	return Server{
@@ -138,7 +138,7 @@ func (s Server) ExpiryLoop(ctx context.Context) {
 
 // ConnectionHandler listens for new pending connections and starts up a clientHandler goroutine for each new connection
 func (s Server) ConnectionHandler(ctx context.Context) {
-	s.Logger.Info("starting connection handler")
+	s.Logger.Info(fmt.Sprintf("starting connection handler at %q", s.listener.Addr()))
 	for {
 		select {
 		case <-ctx.Done():

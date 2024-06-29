@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os/signal"
 	"syscall"
 
@@ -14,13 +15,16 @@ import (
 )
 
 func main() {
+	port := flag.Int64("port", 6379, "specify the port that this reddis instance will listen on")
+	flag.Parse()
+
 	logger, err := log.NewLogger("", zapcore.InfoLevel)
 	if err != nil {
 		logger.Fatal("failed to initialize logger", zap.Error(err))
 	}
 	defer logger.Close()
 
-	server, err := server.NewServer(*logger)
+	server, err := server.NewServer(*logger, *port)
 	if err != nil {
 		logger.Fatal("failed to initialize server", zap.Error(err))
 	}
