@@ -14,6 +14,7 @@ type CommandType string
 const (
 	pingCmd CommandType = "ping"
 	echoCmd CommandType = "echo"
+	infoCmd CommandType = "info"
 	setCmd  CommandType = "set"
 	getCmd  CommandType = "get"
 )
@@ -37,6 +38,8 @@ func ToCommand(data []any) (Command, error) {
 		return toPing(cmdData)
 	case echoCmd:
 		return toEcho(cmdData)
+	case infoCmd:
+		return toInfo(cmdData)
 	case getCmd:
 		return toGet(cmdData)
 	case setCmd:

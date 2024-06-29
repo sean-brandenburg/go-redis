@@ -190,3 +190,10 @@ func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 		}
 	}
 }
+
+func (s Server) getInfo(infoType string) (map[string]string, error) {
+	if infoType != "replication" {
+		return nil, fmt.Errorf("received unexpected info type %q", infoType)
+	}
+	return map[string]string{"role": "master"}, nil
+}

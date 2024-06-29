@@ -30,7 +30,6 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-
 	go server.EventLoop(ctx)
 	go server.ConnectionHandler(ctx)
 	go server.ExpiryLoop(ctx)

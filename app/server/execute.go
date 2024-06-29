@@ -12,6 +12,8 @@ func (s *Server) executeCommand(cmd command.Command) (string, error) {
 		return s.executePing(typedCommand)
 	case command.Echo:
 		return s.executeEcho(typedCommand)
+	case command.Info:
+		return s.executeInfo(typedCommand)
 	case command.Get:
 		return s.executeGet(typedCommand)
 	case command.Set:
@@ -55,6 +57,26 @@ func (s Server) executeSet(set command.Set) (string, error) {
 	res, err := command.Encode("OK")
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for SET command: %w", err)
+	}
+	return res, nil
+}
+
+func (s Server) executeInfo(info command.Info) (string, error) {
+	serverInfo, err := s.getInfo(info.Payload)
+	if err != nil {
+		return "", fmt.Errorf("error executing info command %q: %w", info, err)
+	}
+
+	// TODO: Should sort this, but it being an any makes this a little annoying
+	infoToEncode := make([]any, 0, len(serverInfo))
+	for key, val := range serverInfo {
+		infoToEncode = append(infoToEncode, fmt.Sprintf("%s:%s", key, val))
+	}
+
+	// TODO: This is just for now, eventualy this should have some checks and sort, and check for a lenght of 1, etc.
+	res, err := command.Encode(infoToEncode[0])
+	if err != nil {
+		return "", fmt.Errorf("error encoding response for INFO command: %w", err)
 	}
 	return res, nil
 }

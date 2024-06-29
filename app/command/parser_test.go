@@ -167,6 +167,10 @@ func TestParse(t *testing.T) {
 			rawCmdString: "*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",
 			expectedCmd:  Get{Payload: "banana"},
 		},
+		{
+			rawCmdString: "*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n",
+			expectedCmd:  Info{Payload: "replication"},
+		},
 	} {
 		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmd), func(t *testing.T) {
 			parser, err := NewParser(tc.rawCmdString, log.NewNoOpLogger())
