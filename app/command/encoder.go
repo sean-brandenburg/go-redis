@@ -8,7 +8,7 @@ import (
 // TODO: As this grows in complexity, it may be worth thinking about restructing these encoder/decoder bits
 func Encode(data any) (string, error) {
 	switch typedData := data.(type) {
-	// case []byte: // TODO: Not sure if this needs to be handled
+	// case []byte: // TODO: Not sure if this needs to be handled serperately (as a bulk string)
 	// 	return encodeBulkString(typedData)
 	case []any:
 		return encodeArray(typedData)
@@ -65,7 +65,6 @@ func encodeInt(data int) (string, error) {
 	return fmt.Sprintf(":%d", data), nil
 }
 
-// TODO: Testing
 func EncodeBulkString(data string) (string, error) {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(data), data), nil
 }
@@ -74,12 +73,11 @@ func encodeString(data string) (string, error) {
 	return fmt.Sprintf("+%s", data), nil
 }
 
-// TODO: Check that this is the correct format
 func encodeBool(data bool) (string, error) {
 	if data {
-		return "#true", nil
+		return "#t", nil
 	}
-	return "#false", nil
+	return "#f", nil
 }
 
 //  case '+':

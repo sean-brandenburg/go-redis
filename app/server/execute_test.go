@@ -181,6 +181,46 @@ func TestExecuteSet(t *testing.T) {
 	})
 }
 
+// TODO: Fix these once info has a stable return value
+func TestExecuteInfo(t *testing.T) {
+	for _, tc := range []struct {
+		inputServer  Server
+		expectedInfo string
+	}{
+		{
+			inputServer: &BaseServer{
+				logger: log.NewNoOpLogger(),
+			},
+			expectedInfo: "",
+		},
+		{
+			inputServer: &MasterServer{
+				BaseServer: BaseServer{
+					logger: log.NewNoOpLogger(),
+				},
+			},
+			expectedInfo: "",
+		},
+		{
+			inputServer: &SlaveServer{
+				BaseServer: BaseServer{
+					logger: log.NewNoOpLogger(),
+				},
+				masterAddress: "localhost:123",
+			},
+			expectedInfo: "",
+		},
+	} {
+		t.Run(fmt.Sprintf("executing INFO on a server of type %T should return the expected value", tc.inputServer), func(t *testing.T) {
+			res, err := executeInfo(tc.inputServer, command.Info{
+				Payload: "replication",
+			})
+			assert.Nil(t, err)
+			assert.Equal(t, tc.expectedInfo, res)
+		})
+	}
+}
+
 func TestExecuteCommand(t *testing.T) {
 	for _, tc := range []struct {
 		inputCommand command.Command
@@ -190,6 +230,11 @@ func TestExecuteCommand(t *testing.T) {
 			inputCommand: command.Ping{},
 			expectedRes:  command.MustEncode("PONG"),
 		},
+		// TODO: Fix these once info has a stable return value
+		// {
+		// 	inputCommand: command.Info{Payload: "replication"},
+		// 	expectedRes:  command.MustEncode("info res"),
+		// },
 		{
 			inputCommand: command.Echo{Payload: "test"},
 			expectedRes:  command.MustEncode("test"),
