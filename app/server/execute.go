@@ -2,6 +2,8 @@ package server
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 )
@@ -67,14 +69,14 @@ func (s Server) executeInfo(info command.Info) (string, error) {
 		return "", fmt.Errorf("error executing info command %q: %w", info, err)
 	}
 
-	// TODO: Should sort this, but it being an any makes this a little annoying
-	infoToEncode := make([]any, 0, len(serverInfo))
+	// Sort and join info with new lines
+	infoToEncode := make([]string, 0, len(serverInfo))
 	for key, val := range serverInfo {
 		infoToEncode = append(infoToEncode, fmt.Sprintf("%s:%s", key, val))
 	}
+	slices.Sort(infoToEncode)
 
-	// TODO: This is just for now, eventualy this should have some checks and sort, and check for a lenght of 1, etc.
-	res, err := command.Encode(infoToEncode[0])
+	res, err := command.Encode(strings.Join(infoToEncode, "\n"))
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for INFO command: %w", err)
 	}

@@ -220,5 +220,9 @@ func (s Server) getInfo(infoType string) (map[string]string, error) {
 	if s.masterAddress != "" {
 		return map[string]string{"role": "slave"}, nil
 	}
-	return map[string]string{"role": "master"}, nil
+	return map[string]string{
+		"role":               "master",
+		"master_repl_offset": "0",
+		"master_replid":      "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+	}, nil
 }
