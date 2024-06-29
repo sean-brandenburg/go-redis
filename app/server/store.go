@@ -14,7 +14,7 @@ func (v storeValue) isExpired() bool {
 	return v.expiresAt != nil && v.expiresAt.Before(time.Now())
 }
 
-func (s *Server) Set(key string, value any, expiryTimeMs int64) {
+func (s *BaseServer) Set(key string, value any, expiryTimeMs int64) {
 	s.storeDataMu.Lock()
 	defer s.storeDataMu.Unlock()
 
@@ -32,7 +32,7 @@ func (s *Server) Set(key string, value any, expiryTimeMs int64) {
 	}
 }
 
-func (s *Server) Get(key string) (any, bool) {
+func (s *BaseServer) Get(key string) (any, bool) {
 	s.storeDataMu.Lock()
 	defer s.storeDataMu.Unlock()
 
@@ -43,7 +43,7 @@ func (s *Server) Get(key string) (any, bool) {
 
 	// If we find that the key is expired, delete it
 	if value.isExpired() {
-		s.Logger.Debug(fmt.Sprintf("found expired key for value %q", key))
+		s.logger.Debug(fmt.Sprintf("found expired key for value %q", key))
 		delete(s.storeData, key)
 		return nil, false
 	}

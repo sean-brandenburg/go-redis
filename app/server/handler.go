@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
@@ -24,94 +23,49 @@ const (
 	eventQueueSize = 10
 )
 
-type Server struct {
-	eventQueue chan Event
-	listener   net.Listener
+type ExecuteCommand func(cmd command.Command) (string, error)
 
-	// storeData is a map containing the keys and values held by this store
-	storeData   map[string]storeValue
-	storeDataMu *sync.Mutex
-
-	// masterAddress contains the address of the master node if this is a slave node
-	// otherwise this node is a master node
-	masterAddress string
-
-	Logger log.Logger
-}
-
-type ServerOptions struct {
-	Port      *int
-	ReplicaOf *string
-}
-
-func NewServer(logger log.Logger, opts *ServerOptions) (Server, error) {
-	port := 6379
-	masterAddress := ""
-	if opts != nil {
-		if opts.Port != nil {
-			port = *opts.Port
-		}
-		if opts.ReplicaOf != nil {
-			masterAddress = *opts.ReplicaOf
-		}
-	}
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
-	if err != nil {
-		return Server{}, fmt.Errorf("failed to bind to port %d: %w", port, err)
-	}
-
-	return Server{
-		eventQueue:    make(chan Event, eventQueueSize),
-		listener:      listener,
-		Logger:        logger,
-		storeData:     make(map[string]storeValue),
-		masterAddress: masterAddress,
-		storeDataMu:   &sync.Mutex{},
-	}, nil
-}
-
-func (s Server) EventLoop(ctx context.Context) {
-	s.Logger.Info("starting event loop")
+func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, executeCommand ExecuteCommand) {
+	logger.Info("starting event loop")
 	for {
 		select {
 		case <-ctx.Done():
-			s.Logger.Error("event loop exiting", zap.Error(ctx.Err()))
+			logger.Error("event loop exiting", zap.Error(ctx.Err()))
 			return
-		case event := <-s.eventQueue:
-			s.Logger.Info(
+		case event := <-eventQueue:
+			logger.Info(
 				"processing event",
 				zap.String("command", event.Command),
 				zap.Stringer("remoteAddress", event.ClientConn.RemoteAddr()),
 			)
 
-			parser, err := command.NewParser(event.Command, s.Logger)
+			parser, err := command.NewParser(event.Command, logger)
 			if err != nil {
-				s.Logger.Error("error building parser from client command", zap.Error(err))
+				logger.Error("error building parser from client command", zap.Error(err))
 				continue
 			}
 			cmd, err := parser.Parse()
 			if err != nil {
-				s.Logger.Error("error parsing client command", zap.Error(err))
+				logger.Error("error parsing client command", zap.Error(err))
 				continue
 			}
 
-			s.Logger.Info("executing command", zap.Stringer("command", cmd))
+			logger.Info("executing command", zap.Stringer("command", cmd))
 
-			responseStr, err := s.executeCommand(cmd)
+			responseStr, err := executeCommand(cmd)
 			if err != nil {
-				s.Logger.Error("error running client command", zap.Error(err))
+				logger.Error("error running client command", zap.Error(err))
 				continue
 			}
 
-			s.Logger.Info(
+			logger.Info(
 				"sending response to client",
 				zap.String("response", responseStr),
 				zap.Stringer("remoteAddr", event.ClientConn.RemoteAddr()),
 			)
 			_, err = event.ClientConn.Write([]byte(responseStr))
 			if err != nil {
-				s.Logger.Error("error writing response to client", zap.Error(err), zap.String("response", responseStr))
+				logger.Error("error writing response to client", zap.Error(err), zap.String("response", responseStr))
 				continue
 			}
 		}
@@ -120,12 +74,12 @@ func (s Server) EventLoop(ctx context.Context) {
 
 // ExpiryLoop will check a random sampling of at most `samplesPerExpiry` keys in the server's store to
 // see if they are expired. Any found expired keys are deleted from the store
-func (s Server) ExpiryLoop(ctx context.Context) {
-	s.Logger.Info("starting expiry loop")
+func (s BaseServer) ExpiryLoop(ctx context.Context) {
+	s.logger.Info("starting expiry loop")
 	for {
 		select {
 		case <-ctx.Done():
-			s.Logger.Error("event loop exiting", zap.Error(ctx.Err()))
+			s.logger.Error("event loop exiting", zap.Error(ctx.Err()))
 			return
 		case <-time.After(expiryThreadPeriod):
 			s.storeDataMu.Lock()
@@ -138,7 +92,7 @@ func (s Server) ExpiryLoop(ctx context.Context) {
 				inspectedKeys++
 				if value.isExpired() {
 					expiredKeys++
-					s.Logger.Debug(fmt.Sprintf("expiry loop deleting expired key %q", key))
+					s.logger.Debug(fmt.Sprintf("expiry loop deleting expired key %q", key))
 					delete(s.storeData, key)
 				}
 
@@ -148,7 +102,7 @@ func (s Server) ExpiryLoop(ctx context.Context) {
 			}
 			s.storeDataMu.Unlock()
 
-			s.Logger.Info(
+			s.logger.Info(
 				"expiry loop completed a run",
 				zap.Int64("inspectedKeys", inspectedKeys),
 				zap.Int64("expiredKeys", expiredKeys),
@@ -158,19 +112,19 @@ func (s Server) ExpiryLoop(ctx context.Context) {
 }
 
 // ConnectionHandler listens for new pending connections and starts up a clientHandler goroutine for each new connection
-func (s Server) ConnectionHandler(ctx context.Context) {
-	s.Logger.Info(fmt.Sprintf("starting connection handler at %q", s.listener.Addr()))
+func (s BaseServer) ConnectionHandler(ctx context.Context) {
+	s.logger.Info(fmt.Sprintf("starting connection handler at %q", s.listener.Addr()))
 	for {
 		select {
 		case <-ctx.Done():
-			s.Logger.Error("connection handler exiting", zap.Error(ctx.Err()))
+			s.logger.Error("connection handler exiting", zap.Error(ctx.Err()))
 			return
 		default:
 		}
 
 		clientConn, err := s.listener.Accept()
 		if err != nil {
-			s.Logger.Error("error accepting connection", zap.Error(err))
+			s.logger.Error("error accepting connection", zap.Error(err))
 			continue
 		}
 
@@ -180,9 +134,9 @@ func (s Server) ConnectionHandler(ctx context.Context) {
 
 // clienHandler is responsible for reading messages off of a connection and turning them into events
 // which are then placedon the event queue
-func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
+func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn) {
 	defer conn.Close()
-	s.Logger.Info(
+	s.logger.Info(
 		"starting client handler",
 		zap.Stringer("remoteAddress", conn.RemoteAddr()),
 	)
@@ -190,7 +144,7 @@ func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 	for {
 		select {
 		case <-ctx.Done():
-			s.Logger.Error("client handler exiting", zap.Error(ctx.Err()))
+			s.logger.Error("client handler exiting", zap.Error(ctx.Err()))
 			return
 		default:
 		}
@@ -198,12 +152,12 @@ func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 		data := make([]byte, 512)
 		bytesRead, err := conn.Read(data)
 		if err != nil {
-			s.Logger.Error("error reading from client connection", zap.Error(err))
+			s.logger.Error("error reading from client connection", zap.Error(err))
 			return
 		}
 
 		command := string(data[:bytesRead])
-		s.Logger.Info("received command", zap.String("command", command))
+		s.logger.Info("received command", zap.String("command", command))
 
 		s.eventQueue <- Event{
 			Command:    command,
@@ -212,16 +166,13 @@ func (s Server) clientHandler(ctx context.Context, conn net.Conn) {
 	}
 }
 
-func (s Server) getInfo(infoType string) (map[string]string, error) {
+func GetServerInfo(server Server, infoType string) (map[string]string, error) {
 	if infoType != "replication" {
 		return nil, fmt.Errorf("received unexpected info type %q", infoType)
 	}
 
-	if s.masterAddress != "" {
-		return map[string]string{"role": "slave"}, nil
-	}
 	return map[string]string{
-		"role":               "master",
+		"role":               server.NodeType(),
 		"master_repl_offset": "0",
 		"master_replid":      "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 	}, nil

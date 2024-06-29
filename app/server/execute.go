@@ -8,24 +8,24 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 )
 
-func (s *Server) executeCommand(cmd command.Command) (string, error) {
+func executeCommand(server Server, cmd command.Command) (string, error) {
 	switch typedCommand := cmd.(type) {
 	case command.Ping:
-		return s.executePing(typedCommand)
+		return executePing(typedCommand)
 	case command.Echo:
-		return s.executeEcho(typedCommand)
+		return executeEcho(typedCommand)
 	case command.Info:
-		return s.executeInfo(typedCommand)
+		return executeInfo(server, typedCommand)
 	case command.Get:
-		return s.executeGet(typedCommand)
+		return executeGet(server, typedCommand)
 	case command.Set:
-		return s.executeSet(typedCommand)
+		return executeSet(server, typedCommand)
 	}
 
 	return "", fmt.Errorf("unknown command: %T", cmd)
 }
 
-func (s Server) executePing(_ command.Ping) (string, error) {
+func executePing(_ command.Ping) (string, error) {
 	res, err := command.Encode("PONG")
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for PING command: %w", err)
@@ -33,7 +33,7 @@ func (s Server) executePing(_ command.Ping) (string, error) {
 	return res, nil
 }
 
-func (s Server) executeEcho(echo command.Echo) (string, error) {
+func executeEcho(echo command.Echo) (string, error) {
 	res, err := command.Encode(echo.Payload)
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for ECHO command: %w", err)
@@ -41,8 +41,8 @@ func (s Server) executeEcho(echo command.Echo) (string, error) {
 	return res, nil
 }
 
-func (s Server) executeGet(get command.Get) (string, error) {
-	data, ok := s.Get(get.Payload)
+func executeGet(server Server, get command.Get) (string, error) {
+	data, ok := server.Get(get.Payload)
 	if !ok {
 		return command.NullBulkString, nil
 	}
@@ -54,8 +54,8 @@ func (s Server) executeGet(get command.Get) (string, error) {
 	return res, nil
 }
 
-func (s Server) executeSet(set command.Set) (string, error) {
-	s.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
+func executeSet(server Server, set command.Set) (string, error) {
+	server.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
 	res, err := command.Encode("OK")
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for SET command: %w", err)
@@ -63,8 +63,9 @@ func (s Server) executeSet(set command.Set) (string, error) {
 	return res, nil
 }
 
-func (s Server) executeInfo(info command.Info) (string, error) {
-	serverInfo, err := s.getInfo(info.Payload)
+// TODO: Testing once fn returns are a bit more stable
+func executeInfo(server Server, info command.Info) (string, error) {
+	serverInfo, err := GetServerInfo(server, info.Payload)
 	if err != nil {
 		return "", fmt.Errorf("error executing info command %q: %w", info, err)
 	}
@@ -72,11 +73,11 @@ func (s Server) executeInfo(info command.Info) (string, error) {
 	// Sort and join info with new lines
 	infoToEncode := make([]string, 0, len(serverInfo))
 	for key, val := range serverInfo {
-		infoToEncode = append(infoToEncode, fmt.Sprintf("%s:%s", key, val))
+		infoToEncode = append(infoToEncode, fmt.Sprintf("%s:%s\n", key, val))
 	}
 	slices.Sort(infoToEncode)
 
-	res, err := command.Encode(strings.Join(infoToEncode, "\n"))
+	res, err := command.EncodeBulkString(strings.Join(infoToEncode, ""))
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for INFO command: %w", err)
 	}

@@ -20,10 +20,10 @@ func main() {
 
 	var replicaof string
 	flag.StringVar(&replicaof, "replicaof", "", "specify the hostname and port that this instance should be a replica of")
+	flag.Parse()
+
 	// This flag may be formatted as "hostname port" so we need to turn this into an actual address
 	replicaof = strings.ReplaceAll(replicaof, " ", ":")
-
-	flag.Parse()
 
 	logger, err := log.NewLogger("", zapcore.InfoLevel)
 	if err != nil {
@@ -31,18 +31,30 @@ func main() {
 	}
 	defer logger.Close()
 
-	server, err := server.NewServer(*logger, &server.ServerOptions{
-		Port:      port,
-		ReplicaOf: &replicaof,
-	})
-	if err != nil {
-		logger.Fatal("failed to initialize server", zap.Error(err))
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
-	go server.EventLoop(ctx)
-	go server.ConnectionHandler(ctx)
-	go server.ExpiryLoop(ctx)
+
+	serverOpts := server.ServerOptions{
+		Port: port,
+	}
+	if replicaof == "" {
+		server, err := server.NewMasterServer(*logger, serverOpts)
+		if err != nil {
+			logger.Fatal("failed to initialize master server", zap.Error(err))
+		}
+		err = server.Run(ctx)
+		if err != nil {
+			logger.Fatal("failed to run master server", zap.Error(err))
+		}
+	} else {
+		server, err := server.NewSlaveServer(*logger, replicaof, serverOpts)
+		if err != nil {
+			logger.Fatal("failed to initialize slave server", zap.Error(err))
+		}
+		err = server.Run(ctx)
+		if err != nil {
+			logger.Fatal("failed to run slave server", zap.Error(err))
+		}
+	}
 
 	sigShutdown := make(chan os.Signal, 1)
 	signal.Notify(sigShutdown, syscall.SIGTERM, syscall.SIGINT)

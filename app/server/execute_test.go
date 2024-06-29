@@ -12,11 +12,7 @@ import (
 )
 
 func TestExecutePing(t *testing.T) {
-	server := Server{
-		Logger: log.NewNoOpLogger(),
-	}
-
-	res, err := server.executePing(command.Ping{})
+	res, err := executePing(command.Ping{})
 	assert.Nil(t, err)
 	assert.Equal(t, command.MustEncode("PONG"), res)
 }
@@ -32,11 +28,7 @@ func TestExecuteEcho(t *testing.T) {
 		{payload: "\r\n"},
 	} {
 		t.Run(fmt.Sprintf("ECHO with value %q should return the encoded state", tc.payload), func(t *testing.T) {
-			server := Server{
-				Logger: log.NewNoOpLogger(),
-			}
-
-			res, err := server.executeEcho(command.Echo{Payload: tc.payload})
+			res, err := executeEcho(command.Echo{Payload: tc.payload})
 			assert.Nil(t, err)
 			assert.Equal(t, command.MustEncode(tc.payload), res)
 		})
@@ -74,13 +66,13 @@ func TestExecuteGet(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("GET with key %q and inital state %v and no expiry should succeed", tc.inputKey, tc.mapState), func(t *testing.T) {
-			server := Server{
-				Logger:      log.NewNoOpLogger(),
+			server := BaseServer{
+				logger:      log.NewNoOpLogger(),
 				storeData:   tc.mapState,
 				storeDataMu: &sync.Mutex{},
 			}
 
-			res, err := server.executeGet(command.Get{Payload: tc.inputKey})
+			res, err := executeGet(&server, command.Get{Payload: tc.inputKey})
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedResult, res)
 		})
@@ -88,15 +80,15 @@ func TestExecuteGet(t *testing.T) {
 
 	t.Run("GET on a key that has expired should delete it and return a null bulk string", func(t *testing.T) {
 		pastTime := time.Now().Add(-time.Hour)
-		server := Server{
-			Logger: log.NewNoOpLogger(),
+		server := BaseServer{
+			logger: log.NewNoOpLogger(),
 			storeData: map[string]storeValue{
 				"a": {data: "b", expiresAt: &pastTime},
 			},
 			storeDataMu: &sync.Mutex{},
 		}
 
-		res, err := server.executeGet(command.Get{Payload: "a"})
+		res, err := executeGet(&server, command.Get{Payload: "a"})
 		assert.Nil(t, err)
 		assert.Equal(t, res, command.NullBulkString)
 		assert.Empty(t, server.storeData)
@@ -105,15 +97,15 @@ func TestExecuteGet(t *testing.T) {
 	t.Run("GET on a key that has not expired should return it and should not modify the store state", func(t *testing.T) {
 		futureTime := time.Now().Add(time.Hour)
 
-		server := Server{
-			Logger: log.NewNoOpLogger(),
+		server := BaseServer{
+			logger: log.NewNoOpLogger(),
 			storeData: map[string]storeValue{
 				"a": {data: "b", expiresAt: &futureTime},
 			},
 			storeDataMu: &sync.Mutex{},
 		}
 
-		res, err := server.executeGet(command.Get{Payload: "a"})
+		res, err := executeGet(&server, command.Get{Payload: "a"})
 		assert.Nil(t, err)
 		assert.Equal(t, res, command.MustEncode("b"))
 		// Store data should not have been modified
@@ -152,13 +144,13 @@ func TestExecuteSet(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("SET with key %q and value %v should properly update the server state", tc.inputKey, tc.inputValue), func(t *testing.T) {
-			server := Server{
-				Logger:      log.NewNoOpLogger(),
+			server := BaseServer{
+				logger:      log.NewNoOpLogger(),
 				storeData:   tc.initialMapState,
 				storeDataMu: &sync.Mutex{},
 			}
 
-			res, err := server.executeSet(command.Set{
+			res, err := executeSet(&server, command.Set{
 				KeyPayload:   tc.inputKey,
 				ValuePayload: tc.inputValue,
 			})
@@ -170,13 +162,13 @@ func TestExecuteSet(t *testing.T) {
 	}
 
 	t.Run("SET with an expiry time should set the expiry date to a time in the future", func(t *testing.T) {
-		server := Server{
-			Logger:      log.NewNoOpLogger(),
+		server := BaseServer{
+			logger:      log.NewNoOpLogger(),
 			storeData:   make(map[string]storeValue, 1),
 			storeDataMu: &sync.Mutex{},
 		}
 
-		res, err := server.executeSet(command.Set{
+		res, err := executeSet(&server, command.Set{
 			KeyPayload:   "a",
 			ValuePayload: "b",
 			ExpiryTimeMs: 10000,
@@ -212,13 +204,13 @@ func TestExecuteCommand(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("executing command %q should succeed", tc.inputCommand.String()), func(t *testing.T) {
-			server := Server{
-				Logger:      log.NewNoOpLogger(),
+			server := BaseServer{
+				logger:      log.NewNoOpLogger(),
 				storeData:   map[string]storeValue{"a": {data: "b"}},
 				storeDataMu: &sync.Mutex{},
 			}
 
-			res, err := server.executeCommand(tc.inputCommand)
+			res, err := executeCommand(&server, tc.inputCommand)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expectedRes, res)
 		})

@@ -65,6 +65,11 @@ func encodeInt(data int) (string, error) {
 	return fmt.Sprintf(":%d", data), nil
 }
 
+// TODO: Testing
+func EncodeBulkString(data string) (string, error) {
+	return fmt.Sprintf("$%d\r\n%s\r\n", len(data), data), nil
+}
+
 func encodeString(data string) (string, error) {
 	return fmt.Sprintf("+%s", data), nil
 }

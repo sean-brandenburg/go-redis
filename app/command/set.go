@@ -33,7 +33,6 @@ func toSet(data []any) (Set, error) {
 	// TODO: If there are more of these flags, I should make a better system for handling these
 	// For now just hard code a check for the px flag
 	timeout := int64(0)
-	fmt.Println(data)
 	if len(data) == 4 {
 		rawFlag := data[2]
 		rawFlagValue := data[3]
