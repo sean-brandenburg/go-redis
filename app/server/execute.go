@@ -16,6 +16,8 @@ func executeCommand(server Server, cmd command.Command) (string, error) {
 		return executeEcho(typedCommand)
 	case command.ReplConf:
 		return executeReplConf(typedCommand)
+	case command.PSync:
+		return executePSync(typedCommand)
 	case command.Info:
 		return executeInfo(server, typedCommand)
 	case command.Get:
@@ -79,6 +81,11 @@ func executeInfo(server Server, info command.Info) (string, error) {
 	return res, nil
 }
 
+// Replication //
 func executeReplConf(_ command.ReplConf) (string, error) {
 	return command.OKString, nil
+}
+
+func executePSync(_ command.PSync) (string, error) {
+	return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n", nil
 }
