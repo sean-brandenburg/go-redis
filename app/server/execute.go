@@ -88,6 +88,7 @@ func executeReplConf(_ command.ReplConf) (string, error) {
 	return command.OKString, nil
 }
 
+// TODO: Send full rdb file to replica
 func executePSync(_ command.PSync) (string, error) {
 	return fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODEC_REPL_ID), nil
 }
