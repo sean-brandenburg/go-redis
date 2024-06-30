@@ -31,5 +31,5 @@ func toInfo(data []any) (Info, error) {
 		return Info{}, fmt.Errorf("expected the input for the INFO command to be 'replication' but it was %q", res)
 	}
 
-	return Info{res}, nil
+	return Info{Payload: res}, nil
 }

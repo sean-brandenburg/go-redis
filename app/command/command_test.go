@@ -68,7 +68,7 @@ func TestEncodeCommand(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("should be able to encode command %q", tc.expectedCmdString), func(t *testing.T) {
 			res, err := tc.cmd.EncodedCommand()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedCmdString, res)
 		})
 	}

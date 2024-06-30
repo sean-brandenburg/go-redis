@@ -4,6 +4,8 @@ import (
 	"fmt"
 )
 
+const HARDCODEC_REPL_ID = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+
 type PSync struct {
 	ReplicationID string
 	MasterOffset  string

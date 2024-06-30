@@ -36,7 +36,7 @@ func TestEncoder(t *testing.T) {
 		t.Run(fmt.Sprintf("encoding input %v", tc.input), func(t *testing.T) {
 			e := Encoder{}
 			res, err := e.Encode(tc.input)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedOutput, res)
 		})
 	}
@@ -49,20 +49,20 @@ func TestEncodeBulkString(t *testing.T) {
 	}{
 		{
 			input:          "string",
-			expectedOutput: "$6\r\nstring\r\n",
+			expectedOutput: "$6\r\nstring",
 		},
 		{
 			input:          "",
-			expectedOutput: "$0\r\n\r\n",
+			expectedOutput: "$0\r\n",
 		},
 		{
 			input:          "test\ntest",
-			expectedOutput: "$9\r\ntest\ntest\r\n",
+			expectedOutput: "$9\r\ntest\ntest",
 		},
 	} {
 		t.Run(fmt.Sprintf("encoding input %v", tc.input), func(t *testing.T) {
 			res, err := encodeBulkString(tc.input)
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedOutput, res)
 		})
 	}

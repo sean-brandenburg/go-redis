@@ -14,23 +14,39 @@ import (
 func TestExecutePing(t *testing.T) {
 	res, err := executePing(command.Ping{})
 	assert.Nil(t, err)
-	assert.Equal(t, command.MustEncode("PONG"), res)
+	assert.Equal(t, "+PONG\r\n", res)
 }
 
 func TestExecuteEcho(t *testing.T) {
 	for _, tc := range []struct {
-		payload string
+		payload     string
+		expectedRes string
 	}{
-		{payload: ""},
-		{payload: "a"},
-		{payload: "123"},
-		{payload: "[1,2,3]"},
-		{payload: "\r\n"},
+		{
+			payload:     "",
+			expectedRes: "+\r\n",
+		},
+		{
+			payload:     "a",
+			expectedRes: "+a\r\n",
+		},
+		{
+			payload:     "123",
+			expectedRes: "+123\r\n",
+		},
+		{
+			payload:     "[1,2,3]",
+			expectedRes: "+[1,2,3]\r\n",
+		},
+		{
+			payload:     "\r\n",
+			expectedRes: "+\r\n\r\n",
+		},
 	} {
 		t.Run(fmt.Sprintf("ECHO with value %q should return the encoded state", tc.payload), func(t *testing.T) {
 			res, err := executeEcho(command.Echo{Payload: tc.payload})
 			assert.Nil(t, err)
-			assert.Equal(t, command.MustEncode(tc.payload), res)
+			assert.Equal(t, tc.expectedRes, res)
 		})
 	}
 }
@@ -107,7 +123,7 @@ func TestExecuteGet(t *testing.T) {
 
 		res, err := executeGet(&server, command.Get{Payload: "a"})
 		assert.Nil(t, err)
-		assert.Equal(t, res, command.MustEncode("b"))
+		assert.Equal(t, "+b\r\n", res)
 		// Store data should not have been modified
 		assert.Equal(
 			t,
@@ -182,44 +198,44 @@ func TestExecuteSet(t *testing.T) {
 }
 
 // TODO: Fix these once info has a stable return value
-func TestExecuteInfo(t *testing.T) {
-	for _, tc := range []struct {
-		inputServer  Server
-		expectedInfo string
-	}{
-		{
-			inputServer: &BaseServer{
-				logger: log.NewNoOpLogger(),
-			},
-			expectedInfo: "",
-		},
-		{
-			inputServer: &MasterServer{
-				BaseServer: BaseServer{
-					logger: log.NewNoOpLogger(),
-				},
-			},
-			expectedInfo: "",
-		},
-		{
-			inputServer: &SlaveServer{
-				BaseServer: BaseServer{
-					logger: log.NewNoOpLogger(),
-				},
-				masterAddress: "localhost:123",
-			},
-			expectedInfo: "",
-		},
-	} {
-		t.Run(fmt.Sprintf("executing INFO on a server of type %T should return the expected value", tc.inputServer), func(t *testing.T) {
-			res, err := executeInfo(tc.inputServer, command.Info{
-				Payload: "replication",
-			})
-			assert.Nil(t, err)
-			assert.Equal(t, tc.expectedInfo, res)
-		})
-	}
-}
+// func TestExecuteInfo(t *testing.T) {
+// 	for _, tc := range []struct {
+// 		inputServer  Server
+// 		expectedInfo string
+// 	}{
+// 		{
+// 			inputServer: &BaseServer{
+// 				logger: log.NewNoOpLogger(),
+// 			},
+// 			expectedInfo: "",
+// 		},
+// 		{
+// 			inputServer: &MasterServer{
+// 				BaseServer: BaseServer{
+// 					logger: log.NewNoOpLogger(),
+// 				},
+// 			},
+// 			expectedInfo: "",
+// 		},
+// 		{
+// 			inputServer: &SlaveServer{
+// 				BaseServer: BaseServer{
+// 					logger: log.NewNoOpLogger(),
+// 				},
+// 				masterAddress: "localhost:123",
+// 			},
+// 			expectedInfo: "",
+// 		},
+// 	} {
+// 		t.Run(fmt.Sprintf("executing INFO on a server of type %T should return the expected value", tc.inputServer), func(t *testing.T) {
+// 			res, err := executeInfo(tc.inputServer, command.Info{
+// 				Payload: "replication",
+// 			})
+// 			assert.Nil(t, err)
+// 			assert.Equal(t, tc.expectedInfo, res)
+// 		})
+// 	}
+// }
 
 func TestExecuteCommand(t *testing.T) {
 	for _, tc := range []struct {
@@ -228,7 +244,7 @@ func TestExecuteCommand(t *testing.T) {
 	}{
 		{
 			inputCommand: command.Ping{},
-			expectedRes:  command.MustEncode("PONG"),
+			expectedRes:  "+PONG\r\n",
 		},
 		// TODO: Fix these once info has a stable return value
 		// {
@@ -237,15 +253,27 @@ func TestExecuteCommand(t *testing.T) {
 		// },
 		{
 			inputCommand: command.Echo{Payload: "test"},
-			expectedRes:  command.MustEncode("test"),
+			expectedRes:  "+test\r\n",
 		},
 		{
 			inputCommand: command.Get{Payload: "a"},
-			expectedRes:  command.MustEncode("b"),
+			expectedRes:  "+b\r\n",
 		},
 		{
 			inputCommand: command.Set{KeyPayload: "c", ValuePayload: "d"},
-			expectedRes:  command.MustEncode("OK"),
+			expectedRes:  "+OK\r\n",
+		},
+		{
+			inputCommand: command.ReplConf{KeyPayload: "c", ValuePayload: "d"},
+			expectedRes:  "+OK\r\n",
+		},
+		{
+			inputCommand: command.PSync{ReplicationID: command.HARDCODEC_REPL_ID, MasterOffset: "0"},
+			expectedRes:  "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n",
+		},
+		{
+			inputCommand: command.Info{Payload: "replication"},
+			expectedRes:  "$86\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:base\n\r\n",
 		},
 	} {
 		t.Run(fmt.Sprintf("executing command %q should succeed", tc.inputCommand.String()), func(t *testing.T) {

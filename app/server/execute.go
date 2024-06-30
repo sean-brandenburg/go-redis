@@ -87,5 +87,5 @@ func executeReplConf(_ command.ReplConf) (string, error) {
 }
 
 func executePSync(_ command.PSync) (string, error) {
-	return "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n", nil
+	return fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODEC_REPL_ID), nil
 }

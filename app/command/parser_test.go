@@ -34,7 +34,7 @@ func TestParseSimpleString(t *testing.T) {
 		t.Run(fmt.Sprintf("input %q should parse to string %q", tc.input, tc.expectedOutput), func(t *testing.T) {
 			parser := CommandParser{tokens: []string{tc.input}}
 			res, err := parser.parseSimpleString()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, res, tc.expectedOutput)
 		})
 	}
@@ -69,7 +69,7 @@ func TestParseInt(t *testing.T) {
 		t.Run(fmt.Sprintf("input %q should parse to int %d", tc.input, tc.expectedOutput), func(t *testing.T) {
 			parser := CommandParser{tokens: []string{tc.input}}
 			res, err := parser.parseInt()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, res, tc.expectedOutput)
 		})
 	}
@@ -101,7 +101,7 @@ func TestParseBulkString(t *testing.T) {
 		t.Run(fmt.Sprintf("input %q should parse to string %q", tc.input, tc.expectedOutput), func(t *testing.T) {
 			parser := CommandParser{tokens: tc.input}
 			res, err := parser.parseBulkString()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, res, tc.expectedOutput)
 		})
 	}
@@ -134,7 +134,7 @@ func TestParseArray(t *testing.T) {
 		t.Run(fmt.Sprintf("input %q should parse to array %q", tc.input, tc.expectedOutput), func(t *testing.T) {
 			parser := CommandParser{tokens: tc.input}
 			res, err := parser.parseArray()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, res, tc.expectedOutput)
 		})
 	}
@@ -174,10 +174,10 @@ func TestParse(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmd), func(t *testing.T) {
 			parser, err := NewParser(tc.rawCmdString, log.NewNoOpLogger())
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 
 			cmd, err := parser.Parse()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, tc.expectedCmd, cmd)
 		})
 	}
