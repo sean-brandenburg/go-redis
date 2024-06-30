@@ -22,6 +22,7 @@ const (
 	setCmd      CommandType = "set"
 	getCmd      CommandType = "get"
 	replConfCmd CommandType = "replconf"
+	pSyncCmd    CommandType = "psync"
 )
 
 func ToCommand(data []any) (Command, error) {
@@ -51,6 +52,8 @@ func ToCommand(data []any) (Command, error) {
 		return toSet(cmdData)
 	case replConfCmd:
 		return toReplConf(cmdData)
+	case pSyncCmd:
+		return toPSync(cmdData)
 	default:
 	}
 

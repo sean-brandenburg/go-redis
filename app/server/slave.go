@@ -70,6 +70,16 @@ func (s *SlaveServer) Run(ctx context.Context) error {
 		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
 
+	// 3. The replica sends a PSYNC to master to get a replicationID
+	_, err = s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
+	if err != nil {
+		return fmt.Errorf("failed to send PSYNC to master at address %q: %s", s.masterAddress, err)
+	}
+	// TODO: Parse the response to this cmd
+	// if res != "" {
+	// 	return fmt.Errorf("unexpected response to PSYNC to master at address %q: %s", s.masterAddress, err)
+	// }
+
 	go EventLoop(
 		ctx,
 		s.logger,
