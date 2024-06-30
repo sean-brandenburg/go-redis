@@ -14,6 +14,8 @@ func executeCommand(server Server, cmd command.Command) (string, error) {
 		return executePing(typedCommand)
 	case command.Echo:
 		return executeEcho(typedCommand)
+	case command.ReplConf:
+		return executeReplConf(typedCommand)
 	case command.Info:
 		return executeInfo(server, typedCommand)
 	case command.Get:
@@ -75,4 +77,8 @@ func executeInfo(server Server, info command.Info) (string, error) {
 		return "", fmt.Errorf("error encoding response for INFO command: %w", err)
 	}
 	return res, nil
+}
+
+func executeReplConf(_ command.ReplConf) (string, error) {
+	return command.OKString, nil
 }
