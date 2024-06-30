@@ -14,16 +14,18 @@ func executeCommand(server Server, cmd command.Command) (string, error) {
 		return executePing(typedCommand)
 	case command.Echo:
 		return executeEcho(typedCommand)
-	case command.ReplConf:
-		return executeReplConf(typedCommand)
-	case command.PSync:
-		return executePSync(typedCommand)
 	case command.Info:
 		return executeInfo(server, typedCommand)
 	case command.Get:
 		return executeGet(server, typedCommand)
 	case command.Set:
 		return executeSet(server, typedCommand)
+
+	// Replication Handling
+	case command.ReplConf:
+		return executeReplConf(typedCommand)
+	case command.PSync:
+		return executePSync(typedCommand)
 	}
 
 	return "", fmt.Errorf("unknown command: %T", cmd)
