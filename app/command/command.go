@@ -6,17 +6,22 @@ import (
 )
 
 type Command interface {
+	// String turns a command into a human readable string
 	String() string
+
+	// EncodedCommand turns a command into it's bulk string representation
+	EncodedCommand() (string, error)
 }
 
 type CommandType string
 
 const (
-	pingCmd CommandType = "ping"
-	echoCmd CommandType = "echo"
-	infoCmd CommandType = "info"
-	setCmd  CommandType = "set"
-	getCmd  CommandType = "get"
+	pingCmd     CommandType = "ping"
+	echoCmd     CommandType = "echo"
+	infoCmd     CommandType = "info"
+	setCmd      CommandType = "set"
+	getCmd      CommandType = "get"
+	replConfCmd CommandType = "replconf"
 )
 
 func ToCommand(data []any) (Command, error) {
@@ -44,6 +49,8 @@ func ToCommand(data []any) (Command, error) {
 		return toGet(cmdData)
 	case setCmd:
 		return toSet(cmdData)
+	case replConfCmd:
+		return toReplConf(cmdData)
 	default:
 	}
 

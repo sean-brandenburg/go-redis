@@ -12,6 +12,11 @@ func (echo Echo) String() string {
 	return fmt.Sprintf("ECHO: %q", echo.Payload)
 }
 
+func (echo Echo) EncodedCommand() (string, error) {
+	e := Encoder{UseBulkStrings: true}
+	return e.Encode([]any{string(echoCmd), echo.Payload})
+}
+
 func toEcho(data []any) (Echo, error) {
 	if len(data) != 1 {
 		return Echo{}, fmt.Errorf("expected only one data element for ECHO command, but found %d: %v", len(data), data)

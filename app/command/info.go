@@ -12,6 +12,11 @@ func (info Info) String() string {
 	return fmt.Sprintf("INFO: %q", info.Payload)
 }
 
+func (info Info) EncodedCommand() (string, error) {
+	e := Encoder{UseBulkStrings: true}
+	return e.Encode([]any{string(infoCmd), info.Payload})
+}
+
 func toInfo(data []any) (Info, error) {
 	if len(data) != 1 {
 		return Info{}, fmt.Errorf("expected only one data element for INFO command, but found %d: %v", len(data), data)

@@ -24,8 +24,9 @@ type Server interface {
 }
 
 type BaseServer struct {
-	eventQueue chan Event
-	listener   net.Listener
+	eventQueue   chan Event
+	listener     net.Listener
+	listenerPort int
 
 	// storeData is a map containing the keys and values held by this store
 	storeData   map[string]storeValue
@@ -51,11 +52,12 @@ func NewBaseServer(logger log.Logger, opts ServerOptions) (BaseServer, error) {
 	}
 
 	return BaseServer{
-		eventQueue:  make(chan Event, eventQueueSize),
-		listener:    listener,
-		logger:      logger,
-		storeData:   make(map[string]storeValue),
-		storeDataMu: &sync.Mutex{},
+		eventQueue:   make(chan Event, eventQueueSize),
+		listener:     listener,
+		listenerPort: port,
+		logger:       logger,
+		storeData:    make(map[string]storeValue),
+		storeDataMu:  &sync.Mutex{},
 	}, nil
 }
 

@@ -12,6 +12,11 @@ func (get Get) String() string {
 	return fmt.Sprintf("GET: %q", get.Payload)
 }
 
+func (get Get) EncodedCommand() (string, error) {
+	e := Encoder{UseBulkStrings: true}
+	return e.Encode([]any{string(getCmd), get.Payload})
+}
+
 func toGet(data []any) (Get, error) {
 	if len(data) != 1 {
 		return Get{}, fmt.Errorf("expected 1 key entry to follow GET command but got %d entries: %v", len(data), data)

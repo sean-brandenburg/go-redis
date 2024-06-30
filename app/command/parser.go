@@ -12,6 +12,7 @@ import (
 const (
 	Delimeter      = "\r\n"
 	NullBulkString = "$-1\r\n"
+	OKString       = "+OK\r\n"
 )
 
 type CommandParser struct {

@@ -155,7 +155,7 @@ func TestExecuteSet(t *testing.T) {
 				ValuePayload: tc.inputValue,
 			})
 			assert.Nil(t, err)
-			assert.Equal(t, "+OK\r\n", res)
+			assert.Equal(t, command.OKString, res)
 
 			assert.Equal(t, tc.expectedMapState, server.storeData)
 		})
@@ -174,7 +174,7 @@ func TestExecuteSet(t *testing.T) {
 			ExpiryTimeMs: 10000,
 		})
 		assert.Nil(t, err)
-		assert.Equal(t, "+OK\r\n", res)
+		assert.Equal(t, command.OKString, res)
 
 		// Expiry time should be in the future
 		assert.True(t, server.storeData["a"].expiresAt.After(time.Now()))

@@ -5,33 +5,37 @@ import (
 	"strings"
 )
 
+type Encoder struct {
+	UseBulkStrings bool
+}
+
 // TODO: As this grows in complexity, it may be worth thinking about restructing these encoder/decoder bits
-func Encode(data any) (string, error) {
+func (e Encoder) Encode(data any) (string, error) {
 	switch typedData := data.(type) {
 	// case []byte: // TODO: Not sure if this needs to be handled serperately (as a bulk string)
 	// 	return encodeBulkString(typedData)
 	case []any:
-		return encodeArray(typedData)
+		return e.encodeArray(typedData)
 	default:
-		return encodePrimitive(typedData)
+		return e.encodePrimitive(typedData)
 	}
 }
 
 // MustEncode calls encode, but panics if the error is not nil
-func MustEncode(data any) string {
-	res, err := Encode(data)
+func (e Encoder) MustEncode(data any) string {
+	res, err := e.Encode(data)
 	if err != nil {
 		panic(err)
 	}
 	return res
 }
 
-func encodeArray(arrayData []any) (string, error) {
+func (e Encoder) encodeArray(arrayData []any) (string, error) {
 	builder := strings.Builder{}
 
 	builder.WriteString(fmt.Sprintf("*%d%s", len(arrayData), Delimeter))
 	for _, data := range arrayData {
-		res, err := Encode(data)
+		res, err := e.Encode(data)
 		if err != nil {
 			return "", fmt.Errorf("failed to encode list element: %w", err)
 		}
@@ -41,14 +45,18 @@ func encodeArray(arrayData []any) (string, error) {
 	return builder.String(), nil
 }
 
-func encodePrimitive(data any) (string, error) {
+func (e Encoder) encodePrimitive(data any) (string, error) {
 	var result string
 	var err error
 	switch typedData := data.(type) {
 	case int:
 		result, err = encodeInt(typedData)
 	case string:
-		result, err = encodeString(typedData)
+		if e.UseBulkStrings {
+			result, err = encodeBulkString(typedData)
+		} else {
+			result, err = encodeString(typedData)
+		}
 	case bool:
 		result, err = encodeBool(typedData)
 	default:
@@ -65,8 +73,8 @@ func encodeInt(data int) (string, error) {
 	return fmt.Sprintf(":%d", data), nil
 }
 
-func EncodeBulkString(data string) (string, error) {
-	return fmt.Sprintf("$%d\r\n%s\r\n", len(data), data), nil
+func encodeBulkString(data string) (string, error) {
+	return fmt.Sprintf("$%d\r\n%s", len(data), data), nil
 }
 
 func encodeString(data string) (string, error) {

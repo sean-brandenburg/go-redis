@@ -26,15 +26,11 @@ func executeCommand(server Server, cmd command.Command) (string, error) {
 }
 
 func executePing(_ command.Ping) (string, error) {
-	res, err := command.Encode("PONG")
-	if err != nil {
-		return "", fmt.Errorf("error encoding response for PING command: %w", err)
-	}
-	return res, nil
+	return "+PONG\r\n", nil
 }
 
 func executeEcho(echo command.Echo) (string, error) {
-	res, err := command.Encode(echo.Payload)
+	res, err := command.Encoder{}.Encode(echo.Payload)
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for ECHO command: %w", err)
 	}
@@ -47,7 +43,7 @@ func executeGet(server Server, get command.Get) (string, error) {
 		return command.NullBulkString, nil
 	}
 
-	res, err := command.Encode(data)
+	res, err := command.Encoder{}.Encode(data)
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for GET command: %w", err)
 	}
@@ -56,11 +52,7 @@ func executeGet(server Server, get command.Get) (string, error) {
 
 func executeSet(server Server, set command.Set) (string, error) {
 	server.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
-	res, err := command.Encode("OK")
-	if err != nil {
-		return "", fmt.Errorf("error encoding response for SET command: %w", err)
-	}
-	return res, nil
+	return command.OKString, nil
 }
 
 // TODO: Testing once fn returns are a bit more stable
@@ -77,7 +69,8 @@ func executeInfo(server Server, info command.Info) (string, error) {
 	}
 	slices.Sort(infoToEncode)
 
-	res, err := command.EncodeBulkString(strings.Join(infoToEncode, ""))
+	encoder := command.Encoder{UseBulkStrings: true}
+	res, err := encoder.Encode(strings.Join(infoToEncode, ""))
 	if err != nil {
 		return "", fmt.Errorf("error encoding response for INFO command: %w", err)
 	}

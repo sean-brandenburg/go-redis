@@ -18,6 +18,17 @@ func (set Set) String() string {
 	return fmt.Sprintf("SET: (%q -> %v) with expiration %d", set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
 }
 
+func (set Set) EncodedCommand() (string, error) {
+	// TODO: This only handles string value payloads properly
+	cmdList := []any{string(setCmd), set.KeyPayload, set.ValuePayload}
+	if set.ExpiryTimeMs != 0 {
+		cmdList = append(cmdList, "px", fmt.Sprintf("%d", set.ExpiryTimeMs))
+	}
+
+	e := Encoder{UseBulkStrings: true}
+	return e.Encode(cmdList)
+}
+
 // TODO: Should clean up this function
 func toSet(data []any) (Set, error) {
 	if len(data) != 2 && len(data) != 4 {
