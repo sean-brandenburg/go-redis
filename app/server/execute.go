@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/hex"
 	"fmt"
 	"net"
 	"slices"
@@ -127,12 +126,7 @@ func (e commandExecutor) executePSync(_ command.PSync) error {
 		return fmt.Errorf("error writing reponse to PSYNC command to client: %w", err)
 	}
 
-	emptyRDB, err := hex.DecodeString(command.HARDCODE_EMPTY_RDB)
-	if err != nil {
-		return fmt.Errorf("error decoding empty RDB while handling PSYNC command: %w", err)
-	}
-
-	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))); err != nil {
+	if _, err := e.clientConn.Write(command.GetHardedCodedEmptyRDBBytes()); err != nil {
 		return fmt.Errorf("error writing RDB file response to PSYNC command to client: %w", err)
 	}
 

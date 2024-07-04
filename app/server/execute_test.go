@@ -325,11 +325,11 @@ func TestExecuteSet(t *testing.T) {
 func TestExecuteCommand(t *testing.T) {
 	for _, tc := range []struct {
 		inputCommand command.Command
-		expectedRes  string
+		expectedRes  []string
 	}{
 		{
 			inputCommand: command.Ping{},
-			expectedRes:  "+PONG\r\n",
+			expectedRes:  []string{"+PONG\r\n"},
 		},
 		// TODO: Fix these once info has a stable return value
 		// {
@@ -338,27 +338,27 @@ func TestExecuteCommand(t *testing.T) {
 		// },
 		{
 			inputCommand: command.Echo{Payload: "test"},
-			expectedRes:  "+test\r\n",
+			expectedRes:  []string{"+test\r\n"},
 		},
 		{
 			inputCommand: command.Get{Payload: "a"},
-			expectedRes:  "+b\r\n",
+			expectedRes:  []string{"+b\r\n"},
 		},
 		{
 			inputCommand: command.Set{KeyPayload: "c", ValuePayload: "d"},
-			expectedRes:  "+OK\r\n",
+			expectedRes:  []string{"+OK\r\n"},
 		},
 		{
 			inputCommand: command.ReplConf{KeyPayload: "c", ValuePayload: "d"},
-			expectedRes:  "+OK\r\n",
+			expectedRes:  []string{"+OK\r\n"},
 		},
 		{
 			inputCommand: command.PSync{ReplicationID: command.HARDCODE_REPL_ID, MasterOffset: "0"},
-			expectedRes:  "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n",
+			expectedRes:  []string{"+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n", string(command.GetHardedCodedEmptyRDBBytes())},
 		},
 		{
 			inputCommand: command.Info{Payload: "replication"},
-			expectedRes:  "$86\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:base\n\r\n",
+			expectedRes:  []string{"$86\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:base\n\r\n"},
 		},
 	} {
 		t.Run(fmt.Sprintf("executing command %q should succeed", tc.inputCommand.String()), func(t *testing.T) {
@@ -372,12 +372,15 @@ func TestExecuteCommand(t *testing.T) {
 				wg.Done()
 			}()
 
-			res := make([]byte, MaxMessageSize)
-			numBytes, err := reader.Read(res)
-			wg.Wait()
+			for _, expectedMessage := range tc.expectedRes {
+				res := make([]byte, MaxMessageSize)
+				numBytes, err := reader.Read(res)
 
-			assert.Nil(t, err)
-			assert.Equal(t, tc.expectedRes, string(res[:numBytes]))
+				assert.Nil(t, err)
+				assert.Equal(t, expectedMessage, string(res[:numBytes]))
+			}
+
+			wg.Wait()
 		})
 	}
 }
