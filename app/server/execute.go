@@ -126,7 +126,8 @@ func (e commandExecutor) executePSync(_ command.PSync) error {
 		return fmt.Errorf("error writing reponse to PSYNC command to client: %w", err)
 	}
 
-	if _, err := e.clientConn.Write(command.GetHardedCodedEmptyRDBBytes()); err != nil {
+	emptyRDB := command.GetHardedCodedEmptyRDBBytes()
+	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))); err != nil {
 		return fmt.Errorf("error writing RDB file response to PSYNC command to client: %w", err)
 	}
 
