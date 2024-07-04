@@ -54,7 +54,11 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, se
 			}
 
 			logger.Info("executing command", zap.Stringer("command", cmd))
-			err = server.ExecuteCommand(event.ClientConn, cmd)
+			err = commandExecutor{
+				server:     server,
+				clientConn: event.ClientConn,
+			}.execute(cmd)
+
 			if err != nil {
 				logger.Error("error executing client command", zap.Error(err))
 				continue
@@ -165,6 +169,6 @@ func GetServerInfo(server Server, infoType string) (map[string]string, error) {
 	return map[string]string{
 		"role":               server.NodeType(),
 		"master_repl_offset": "0",
-		"master_replid":      command.HARDCODEC_REPL_ID,
+		"master_replid":      command.HARDCODE_REPL_ID,
 	}, nil
 }

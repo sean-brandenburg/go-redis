@@ -353,7 +353,7 @@ func TestExecuteCommand(t *testing.T) {
 			expectedRes:  "+OK\r\n",
 		},
 		{
-			inputCommand: command.PSync{ReplicationID: command.HARDCODEC_REPL_ID, MasterOffset: "0"},
+			inputCommand: command.PSync{ReplicationID: command.HARDCODE_REPL_ID, MasterOffset: "0"},
 			expectedRes:  "+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n",
 		},
 		{

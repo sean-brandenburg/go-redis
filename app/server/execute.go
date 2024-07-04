@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"slices"
@@ -122,8 +123,17 @@ func (e commandExecutor) executeReplConf(_ command.ReplConf) error {
 
 // TODO: Send full rdb file to replica
 func (e commandExecutor) executePSync(_ command.PSync) error {
-	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODEC_REPL_ID))); err != nil {
+	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODE_REPL_ID))); err != nil {
 		return fmt.Errorf("error writing reponse to PSYNC command to client: %w", err)
+	}
+
+	emptyRDB, err := hex.DecodeString(command.HARDCODE_EMPTY_RDB)
+	if err != nil {
+		return fmt.Errorf("error decoding empty RDB while handling PSYNC command: %w", err)
+	}
+
+	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))); err != nil {
+		return fmt.Errorf("error writing RDB file response to PSYNC command to client: %w", err)
 	}
 
 	return nil

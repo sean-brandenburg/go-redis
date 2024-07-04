@@ -14,9 +14,6 @@ type Server interface {
 	// Run the server
 	Run(ctx context.Context) error
 
-	// Execute a command on this server
-	ExecuteCommand(clientConn net.Conn, command command.Command) error
-
 	// Set sets a key in the server's store
 	Set(key string, value any, expiryTimeMs int64)
 
