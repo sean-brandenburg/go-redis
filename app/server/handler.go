@@ -21,11 +21,14 @@ const (
 	// The size of the event queue. Note that a smaller number here can be used
 	// in order to apply backpressure on the connectionHandlers
 	eventQueueSize = 10
+
+	// Max bytes in a message
+	MaxMessageSize = 512
 )
 
-type ExecuteCommand func(cmd command.Command) (string, error)
+type ExecuteCommand func(clientConn net.Conn, cmd command.Command) error
 
-func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, executeCommand ExecuteCommand) {
+func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, server Server) {
 	logger.Info("starting event loop")
 	for {
 		select {
@@ -51,21 +54,9 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, ex
 			}
 
 			logger.Info("executing command", zap.Stringer("command", cmd))
-
-			responseStr, err := executeCommand(cmd)
+			err = server.ExecuteCommand(event.ClientConn, cmd)
 			if err != nil {
-				logger.Error("error running client command", zap.Error(err))
-				continue
-			}
-
-			logger.Info(
-				"sending response to client",
-				zap.String("response", responseStr),
-				zap.Stringer("remoteAddr", event.ClientConn.RemoteAddr()),
-			)
-			_, err = event.ClientConn.Write([]byte(responseStr))
-			if err != nil {
-				logger.Error("error writing response to client", zap.Error(err), zap.String("response", responseStr))
+				logger.Error("error executing client command", zap.Error(err))
 				continue
 			}
 		}
@@ -149,7 +140,7 @@ func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn) {
 		default:
 		}
 
-		data := make([]byte, 512)
+		data := make([]byte, MaxMessageSize)
 		bytesRead, err := conn.Read(data)
 		if err != nil {
 			s.logger.Error("error reading from client connection", zap.Error(err))

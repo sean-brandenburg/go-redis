@@ -2,70 +2,94 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"slices"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 )
 
-func executeCommand(server Server, cmd command.Command) (string, error) {
+type commandExecutor struct {
+	server     Server
+	clientConn net.Conn
+}
+
+func (e commandExecutor) execute(cmd command.Command) error {
 	switch typedCommand := cmd.(type) {
 	case command.Ping:
-		return executePing(typedCommand)
+		return e.executePing(typedCommand)
 	case command.Echo:
-		return executeEcho(typedCommand)
+		return e.executeEcho(typedCommand)
 	case command.Info:
-		return executeInfo(server, typedCommand)
+		return e.executeInfo(typedCommand)
 	case command.Get:
-		return executeGet(server, typedCommand)
+		return e.executeGet(typedCommand)
 	case command.Set:
-		return executeSet(server, typedCommand)
+		return e.executeSet(typedCommand)
 
 	// Replication Handling
 	case command.ReplConf:
-		return executeReplConf(typedCommand)
+		return e.executeReplConf(typedCommand)
 	case command.PSync:
-		return executePSync(typedCommand)
+		return e.executePSync(typedCommand)
 	}
 
-	return "", fmt.Errorf("unknown command: %T", cmd)
+	return fmt.Errorf("unknown command: %T", cmd)
 }
 
-func executePing(_ command.Ping) (string, error) {
-	return "+PONG\r\n", nil
+func (e commandExecutor) executePing(_ command.Ping) error {
+	if _, err := e.clientConn.Write([]byte("+PONG\r\n")); err != nil {
+		return fmt.Errorf("error writing reponse to PING command to client: %w", err)
+	}
+	return nil
 }
 
-func executeEcho(echo command.Echo) (string, error) {
-	res, err := command.Encoder{}.Encode(echo.Payload)
+func (e commandExecutor) executeEcho(echo command.Echo) error {
+	resStr, err := command.Encoder{}.Encode(echo.Payload)
 	if err != nil {
-		return "", fmt.Errorf("error encoding response for ECHO command: %w", err)
+		return fmt.Errorf("error encoding response for ECHO command: %w", err)
 	}
-	return res, nil
+
+	if _, err := e.clientConn.Write([]byte(resStr)); err != nil {
+		return fmt.Errorf("error writing reponse to ECHO command to client: %w", err)
+	}
+	return nil
 }
 
-func executeGet(server Server, get command.Get) (string, error) {
-	data, ok := server.Get(get.Payload)
-	if !ok {
-		return command.NullBulkString, nil
+func (e commandExecutor) executeGet(get command.Get) error {
+	responseString := command.NullBulkString
+
+	data, ok := e.server.Get(get.Payload)
+	if ok {
+		var err error
+		responseString, err = command.Encoder{}.Encode(data)
+		if err != nil {
+			return fmt.Errorf("error encoding response for GET command: %w", err)
+		}
 	}
 
-	res, err := command.Encoder{}.Encode(data)
-	if err != nil {
-		return "", fmt.Errorf("error encoding response for GET command: %w", err)
+	if _, err := e.clientConn.Write([]byte(responseString)); err != nil {
+		return fmt.Errorf("error writing reponse to GET command to client: %w", err)
 	}
-	return res, nil
+
+	return nil
 }
 
-func executeSet(server Server, set command.Set) (string, error) {
-	server.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
-	return command.OKString, nil
+func (e commandExecutor) executeSet(set command.Set) error {
+	e.server.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
+
+	if _, err := e.clientConn.Write([]byte(command.OKString)); err != nil {
+		return fmt.Errorf("error writing reponse to SET command to client: %w", err)
+	}
+
+	return nil
 }
 
 // TODO: Testing once fn returns are a bit more stable
-func executeInfo(server Server, info command.Info) (string, error) {
-	serverInfo, err := GetServerInfo(server, info.Payload)
+func (e commandExecutor) executeInfo(info command.Info) error {
+	serverInfo, err := GetServerInfo(e.server, info.Payload)
 	if err != nil {
-		return "", fmt.Errorf("error executing info command %q: %w", info, err)
+		return fmt.Errorf("error getting server info: %w", err)
 	}
 
 	// Sort and join info with new lines
@@ -78,17 +102,29 @@ func executeInfo(server Server, info command.Info) (string, error) {
 	encoder := command.Encoder{UseBulkStrings: true}
 	res, err := encoder.Encode(strings.Join(infoToEncode, ""))
 	if err != nil {
-		return "", fmt.Errorf("error encoding response for INFO command: %w", err)
+		return fmt.Errorf("error encoding response for INFO command: %w", err)
 	}
-	return res, nil
+
+	if _, err := e.clientConn.Write([]byte(res)); err != nil {
+		return fmt.Errorf("error writing reponse to INFO command to client: %w", err)
+	}
+
+	return nil
 }
 
 // Replication //
-func executeReplConf(_ command.ReplConf) (string, error) {
-	return command.OKString, nil
+func (e commandExecutor) executeReplConf(_ command.ReplConf) error {
+	if _, err := e.clientConn.Write([]byte(command.OKString)); err != nil {
+		return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
+	}
+	return nil
 }
 
 // TODO: Send full rdb file to replica
-func executePSync(_ command.PSync) (string, error) {
-	return fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODEC_REPL_ID), nil
+func (e commandExecutor) executePSync(_ command.PSync) error {
+	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODEC_REPL_ID))); err != nil {
+		return fmt.Errorf("error writing reponse to PSYNC command to client: %w", err)
+	}
+
+	return nil
 }

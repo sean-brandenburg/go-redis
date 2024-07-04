@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
@@ -13,12 +14,18 @@ type Server interface {
 	// Run the server
 	Run(ctx context.Context) error
 
+	// Execute a command on this server
+	ExecuteCommand(clientConn net.Conn, command command.Command) error
+
 	// Set sets a key in the server's store
 	Set(key string, value any, expiryTimeMs int64)
 
 	// Get's a value from the server's store and returns a bool
 	// indicating whether or not the key was found
 	Get(key string) (any, bool)
+
+	// Returns the number of strings in the store
+	Size() int
 
 	NodeType() string
 }
@@ -29,7 +36,7 @@ type BaseServer struct {
 	listenerPort int
 
 	// storeData is a map containing the keys and values held by this store
-	storeData   map[string]storeValue
+	storeData   serverStore
 	storeDataMu *sync.Mutex
 
 	logger log.Logger
@@ -67,6 +74,13 @@ func (s *BaseServer) Logger() log.Logger {
 
 func (s *BaseServer) NodeType() string {
 	return "base"
+}
+
+func (s *BaseServer) ExecuteCommand(clientConn net.Conn, command command.Command) error {
+	return commandExecutor{
+		server:     s,
+		clientConn: clientConn,
+	}.execute(command)
 }
 
 func (s *BaseServer) Run(ctx context.Context) error {

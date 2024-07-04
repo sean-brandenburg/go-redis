@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+type serverStore map[string]storeValue
+
 type storeValue struct {
 	data      any
 	expiresAt *time.Time
@@ -49,4 +51,11 @@ func (s *BaseServer) Get(key string) (any, bool) {
 	}
 
 	return value.data, true
+}
+
+func (s *BaseServer) Size() int {
+	s.storeDataMu.Lock()
+	defer s.storeDataMu.Unlock()
+
+	return len(s.storeData)
 }

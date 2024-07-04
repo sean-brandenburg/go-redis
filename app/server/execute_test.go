@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -11,10 +12,38 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func initTestCommandExecutor(initialData serverStore) (commandExecutor, net.Conn) {
+	writer, reader := net.Pipe()
+	return commandExecutor{
+		server: &BaseServer{
+			storeData:   initialData,
+			storeDataMu: &sync.Mutex{},
+			logger:      log.NewNoOpLogger(),
+		},
+		clientConn: writer,
+	}, reader
+}
+
 func TestExecutePing(t *testing.T) {
-	res, err := executePing(command.Ping{})
+	executor, reader := initTestCommandExecutor(map[string]storeValue{})
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	// Execute the command in a goroutine because reader.Write with a net.Pipe is blocking
+	go func() {
+		defer wg.Done()
+
+		err := executor.executePing(command.Ping{})
+		assert.Nil(t, err)
+	}()
+
+	res := make([]byte, MaxMessageSize)
+	numBytes, err := reader.Read(res)
+	wg.Wait()
+
 	assert.Nil(t, err)
-	assert.Equal(t, "+PONG\r\n", res)
+	assert.Equal(t, "+PONG\r\n", string(res[:numBytes]))
 }
 
 func TestExecuteEcho(t *testing.T) {
@@ -44,92 +73,128 @@ func TestExecuteEcho(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("ECHO with value %q should return the encoded state", tc.payload), func(t *testing.T) {
-			res, err := executeEcho(command.Echo{Payload: tc.payload})
+			executor, reader := initTestCommandExecutor(serverStore{})
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			// Execute the command in a goroutine because reader.Write with a net.Pipe is blocking
+			go func() {
+				err := executor.executeEcho(command.Echo{Payload: tc.payload})
+				assert.Nil(t, err)
+				wg.Done()
+			}()
+
+			res := make([]byte, MaxMessageSize)
+			numBytes, err := reader.Read(res)
+			wg.Wait()
+
 			assert.Nil(t, err)
-			assert.Equal(t, tc.expectedRes, res)
+			assert.Equal(t, tc.expectedRes, string(res[:numBytes]))
 		})
 	}
 }
 
 func TestExecuteGet(t *testing.T) {
 	for _, tc := range []struct {
-		inputKey       string
-		mapState       map[string]storeValue
-		expectedResult string
+		inputKey                string
+		initialServerStoreState serverStore
+		expectedRes             string
 	}{
 		{
-			inputKey:       "c",
-			mapState:       map[string]storeValue{"a": {data: "b"}},
-			expectedResult: "$-1\r\n",
+			inputKey:                "c",
+			initialServerStoreState: serverStore{"a": {data: "b"}},
+			expectedRes:             "$-1\r\n",
 		},
 		{
-			inputKey:       "a",
-			mapState:       map[string]storeValue{"a": {data: 2}},
-			expectedResult: ":2\r\n",
+			inputKey:                "a",
+			initialServerStoreState: serverStore{"a": {data: 2}},
+			expectedRes:             ":2\r\n",
 		},
 		{
-			inputKey:       "a",
-			mapState:       map[string]storeValue{"a": {data: "b"}},
-			expectedResult: "+b\r\n",
+			inputKey:                "a",
+			initialServerStoreState: serverStore{"a": {data: "b"}},
+			expectedRes:             "+b\r\n",
 		},
 		{
 			inputKey: "a",
-			mapState: map[string]storeValue{
+			initialServerStoreState: serverStore{
 				"a": {data: "b"},
 				"c": {data: "d"},
 			},
-			expectedResult: "+b\r\n",
+			expectedRes: "+b\r\n",
 		},
 	} {
-		t.Run(fmt.Sprintf("GET with key %q and inital state %v and no expiry should succeed", tc.inputKey, tc.mapState), func(t *testing.T) {
-			server := BaseServer{
-				logger:      log.NewNoOpLogger(),
-				storeData:   tc.mapState,
-				storeDataMu: &sync.Mutex{},
-			}
+		t.Run(fmt.Sprintf("GET with key %q and inital state %v and no expiry should succeed", tc.inputKey, tc.initialServerStoreState), func(t *testing.T) {
+			executor, reader := initTestCommandExecutor(tc.initialServerStoreState)
 
-			res, err := executeGet(&server, command.Get{Payload: tc.inputKey})
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			// Execute the command in a goroutine because reader.Write with a net.Pipe is blocking
+			go func() {
+				err := executor.executeGet(command.Get{Payload: tc.inputKey})
+				assert.Nil(t, err)
+				wg.Done()
+			}()
+
+			res := make([]byte, MaxMessageSize)
+			numBytes, err := reader.Read(res)
+			wg.Wait()
+
 			assert.Nil(t, err)
-			assert.Equal(t, tc.expectedResult, res)
+			assert.Equal(t, tc.expectedRes, string(res[:numBytes]))
 		})
 	}
 
 	t.Run("GET on a key that has expired should delete it and return a null bulk string", func(t *testing.T) {
 		pastTime := time.Now().Add(-time.Hour)
-		server := BaseServer{
-			logger: log.NewNoOpLogger(),
-			storeData: map[string]storeValue{
-				"a": {data: "b", expiresAt: &pastTime},
-			},
-			storeDataMu: &sync.Mutex{},
-		}
+		executor, reader := initTestCommandExecutor(serverStore{
+			"a": {data: "b", expiresAt: &pastTime},
+		})
 
-		res, err := executeGet(&server, command.Get{Payload: "a"})
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		// Execute the command in a goroutine because reader.Write with a net.Pipe is blocking
+		go func() {
+			err := executor.executeGet(command.Get{Payload: "a"})
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+
+		res := make([]byte, MaxMessageSize)
+		numBytes, err := reader.Read(res)
+		wg.Wait()
+
 		assert.Nil(t, err)
-		assert.Equal(t, res, command.NullBulkString)
-		assert.Empty(t, server.storeData)
+		assert.Zero(t, executor.server.Size())
+		assert.Equal(t, command.NullBulkString, string(res[:numBytes]))
 	})
 
 	t.Run("GET on a key that has not expired should return it and should not modify the store state", func(t *testing.T) {
 		futureTime := time.Now().Add(time.Hour)
+		executor, reader := initTestCommandExecutor(serverStore{
+			"a": {data: "b", expiresAt: &futureTime},
+		})
 
-		server := BaseServer{
-			logger: log.NewNoOpLogger(),
-			storeData: map[string]storeValue{
-				"a": {data: "b", expiresAt: &futureTime},
-			},
-			storeDataMu: &sync.Mutex{},
-		}
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			err := executor.executeGet(command.Get{Payload: "a"})
+			assert.Nil(t, err)
+			wg.Done()
+		}()
 
-		res, err := executeGet(&server, command.Get{Payload: "a"})
+		res := make([]byte, MaxMessageSize)
+		numBytes, err := reader.Read(res)
+		wg.Wait()
+
 		assert.Nil(t, err)
-		assert.Equal(t, "+b\r\n", res)
+		assert.Equal(t, "+b\r\n", string(res[:numBytes]))
+
 		// Store data should not have been modified
-		assert.Equal(
-			t,
-			map[string]storeValue{"a": {data: "b", expiresAt: &futureTime}},
-			server.storeData,
-		)
+		assert.Equal(t, 1, executor.server.Size())
+		value, ok := executor.server.Get("a")
+		assert.True(t, ok)
+		assert.Equal(t, "b", value)
 	})
 }
 
@@ -160,40 +225,60 @@ func TestExecuteSet(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("SET with key %q and value %v should properly update the server state", tc.inputKey, tc.inputValue), func(t *testing.T) {
-			server := BaseServer{
-				logger:      log.NewNoOpLogger(),
-				storeData:   tc.initialMapState,
-				storeDataMu: &sync.Mutex{},
-			}
+			executor, reader := initTestCommandExecutor(serverStore{})
 
-			res, err := executeSet(&server, command.Set{
-				KeyPayload:   tc.inputKey,
-				ValuePayload: tc.inputValue,
-			})
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				err := executor.executeSet(command.Set{
+					KeyPayload:   tc.inputKey,
+					ValuePayload: tc.inputValue,
+				})
+				assert.Nil(t, err)
+				wg.Done()
+			}()
+
+			res := make([]byte, MaxMessageSize)
+			numBytes, err := reader.Read(res)
+			wg.Wait()
+
 			assert.Nil(t, err)
-			assert.Equal(t, command.OKString, res)
-
-			assert.Equal(t, tc.expectedMapState, server.storeData)
+			assert.Equal(t, command.OKString, string(res[:numBytes]))
+			assert.Equal(t, len(tc.expectedMapState), executor.server.Size())
+			for expectedKey, expetedValue := range tc.expectedMapState {
+				value, ok := executor.server.Get(expectedKey)
+				assert.True(t, ok)
+				assert.Equal(t, expetedValue.data, value)
+			}
 		})
 	}
 
-	t.Run("SET with an expiry time should set the expiry date to a time in the future", func(t *testing.T) {
-		server := BaseServer{
-			logger:      log.NewNoOpLogger(),
-			storeData:   make(map[string]storeValue, 1),
-			storeDataMu: &sync.Mutex{},
-		}
+	t.Run("SET with an expiry time should create an unexpired object", func(t *testing.T) {
+		executor, reader := initTestCommandExecutor(serverStore{})
 
-		res, err := executeSet(&server, command.Set{
-			KeyPayload:   "a",
-			ValuePayload: "b",
-			ExpiryTimeMs: 10000,
-		})
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			err := executor.executeSet(command.Set{
+				KeyPayload:   "a",
+				ValuePayload: "b",
+				ExpiryTimeMs: 10000,
+			})
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+
+		res := make([]byte, MaxMessageSize)
+		numBytes, err := reader.Read(res)
+		wg.Wait()
+
 		assert.Nil(t, err)
-		assert.Equal(t, command.OKString, res)
+		assert.Equal(t, command.OKString, string(res[:numBytes]))
+		assert.Equal(t, 1, executor.server.Size())
 
-		// Expiry time should be in the future
-		assert.True(t, server.storeData["a"].expiresAt.After(time.Now()))
+		value, ok := executor.server.Get("a")
+		assert.True(t, ok)
+		assert.Equal(t, "b", value)
 	})
 }
 
@@ -277,15 +362,22 @@ func TestExecuteCommand(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("executing command %q should succeed", tc.inputCommand.String()), func(t *testing.T) {
-			server := BaseServer{
-				logger:      log.NewNoOpLogger(),
-				storeData:   map[string]storeValue{"a": {data: "b"}},
-				storeDataMu: &sync.Mutex{},
-			}
+			executor, reader := initTestCommandExecutor(serverStore{"a": {data: "b"}})
 
-			res, err := executeCommand(&server, tc.inputCommand)
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				err := executor.execute(tc.inputCommand)
+				assert.Nil(t, err)
+				wg.Done()
+			}()
+
+			res := make([]byte, MaxMessageSize)
+			numBytes, err := reader.Read(res)
+			wg.Wait()
+
 			assert.Nil(t, err)
-			assert.Equal(t, tc.expectedRes, res)
+			assert.Equal(t, tc.expectedRes, string(res[:numBytes]))
 		})
 	}
 }

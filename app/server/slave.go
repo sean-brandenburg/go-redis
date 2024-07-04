@@ -84,9 +84,7 @@ func (s *SlaveServer) Run(ctx context.Context) error {
 		ctx,
 		s.logger,
 		s.eventQueue,
-		func(cmd command.Command) (string, error) {
-			return executeCommand(s, cmd)
-		},
+		s,
 	)
 	go s.ConnectionHandler(ctx)
 	go s.ExpiryLoop(ctx)
