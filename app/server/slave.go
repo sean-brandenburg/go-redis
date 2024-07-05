@@ -84,10 +84,24 @@ func (s *SlaveServer) Run(ctx context.Context) error {
 		ctx,
 		s.logger,
 		s.eventQueue,
-		s,
+		func(clientConn net.Conn, cmd command.Command) error {
+			return s.ExecuteCommand(clientConn, cmd)
+		},
 	)
 	go s.ConnectionHandler(ctx)
 	go s.ExpiryLoop(ctx)
+
+	return nil
+}
+
+func (s *SlaveServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) error {
+	err := commandExecutor{
+		server:     s,
+		clientConn: clientConn,
+	}.execute(cmd)
+	if err != nil {
+		return fmt.Errorf("error executing command: %w", err)
+	}
 
 	return nil
 }

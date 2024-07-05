@@ -34,7 +34,7 @@ func (s *MasterServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) 
 	err := commandExecutor{
 		server:     s,
 		clientConn: clientConn,
-	}.execute(command)
+	}.execute(cmd)
 	if err != nil {
 		return fmt.Errorf("error executing command: %w", err)
 	}
