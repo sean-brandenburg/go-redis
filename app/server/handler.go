@@ -28,7 +28,7 @@ const (
 
 type ExecuteCommand func(clientConn net.Conn, cmd command.Command) error
 
-func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, server Server) {
+func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, execute ExecuteCommand) {
 	logger.Info("starting event loop")
 	for {
 		select {
@@ -54,11 +54,7 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, se
 			}
 
 			logger.Info("executing command", zap.Stringer("command", cmd))
-			err = commandExecutor{
-				server:     server,
-				clientConn: event.ClientConn,
-			}.execute(cmd)
-
+			err = execute(event.ClientConn, cmd)
 			if err != nil {
 				logger.Error("error executing client command", zap.Error(err))
 				continue

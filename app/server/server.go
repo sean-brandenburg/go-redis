@@ -14,6 +14,9 @@ type Server interface {
 	// Run the server
 	Run(ctx context.Context) error
 
+	// Execute a command on this server
+	ExecuteCommand(clientConn net.Conn, command command.Command) error
+
 	// Set sets a key in the server's store
 	Set(key string, value any, expiryTimeMs int64)
 
@@ -73,6 +76,8 @@ func (s *BaseServer) NodeType() string {
 	return "base"
 }
 
+// NOTE: The base server implementation of ExecuteCommand should only be used in tests
+// Otherwise we should use the MasterServer and SlaveServer implementations
 func (s *BaseServer) ExecuteCommand(clientConn net.Conn, command command.Command) error {
 	return commandExecutor{
 		server:     s,

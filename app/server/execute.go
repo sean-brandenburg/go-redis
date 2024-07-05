@@ -131,5 +131,7 @@ func (e commandExecutor) executePSync(_ command.PSync) error {
 		return fmt.Errorf("error writing RDB file response to PSYNC command to client: %w", err)
 	}
 
+	// TODO: This should only be run on a master node and we should add this connection to our replica connections when we finsih here
+
 	return nil
 }

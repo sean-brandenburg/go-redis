@@ -11,6 +11,12 @@ type Encoder struct {
 
 // TODO: As this grows in complexity, it may be worth thinking about restructing these encoder/decoder bits
 func (e Encoder) Encode(data any) (string, error) {
+
+	// TODO: Handle arrays that are not explicityl []any
+	// t := reflect.TypeOf(data)
+	// if t.Kind() == reflect.Array {
+	// }
+
 	switch typedData := data.(type) {
 	// case []byte: // TODO: Not sure if this needs to be handled serperately (as a bulk string)
 	// 	return encodeBulkString(typedData)
