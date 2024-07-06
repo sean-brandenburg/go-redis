@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"slices"
@@ -114,6 +115,10 @@ func (e commandExecutor) executeInfo(info command.Info) error {
 
 // Replication //
 func (e commandExecutor) executeReplConf(_ command.ReplConf) error {
+	if _, ok := e.server.(*MasterServer); !ok {
+		return errors.New("received a REPLCONF command on a non-master server")
+	}
+
 	if _, err := e.clientConn.Write([]byte(command.OKString)); err != nil {
 		return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
 	}
@@ -122,6 +127,11 @@ func (e commandExecutor) executeReplConf(_ command.ReplConf) error {
 
 // TODO: Send full rdb file to replica
 func (e commandExecutor) executePSync(_ command.PSync) error {
+	master, ok := e.server.(*MasterServer)
+	if !ok {
+		return errors.New("received a PSYNC command on a non-master server")
+	}
+
 	if _, err := e.clientConn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODE_REPL_ID))); err != nil {
 		return fmt.Errorf("error writing reponse to PSYNC command to client: %w", err)
 	}
@@ -131,7 +141,7 @@ func (e commandExecutor) executePSync(_ command.PSync) error {
 		return fmt.Errorf("error writing RDB file response to PSYNC command to client: %w", err)
 	}
 
-	// TODO: This should only be run on a master node and we should add this connection to our replica connections when we finsih here
+	master.registeredReplicaConns = append(master.registeredReplicaConns, e.clientConn)
 
 	return nil
 }
