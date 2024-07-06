@@ -15,10 +15,13 @@ import (
 func initTestCommandExecutor(initialData serverStore) (commandExecutor, net.Conn) {
 	writer, reader := net.Pipe()
 	return commandExecutor{
-		server: &BaseServer{
-			storeData:   initialData,
-			storeDataMu: &sync.Mutex{},
-			logger:      log.NewNoOpLogger(),
+		server: &MasterServer{
+			BaseServer: BaseServer{
+				storeData:   initialData,
+				storeDataMu: &sync.Mutex{},
+				logger:      log.NewNoOpLogger(),
+			},
+			registeredReplicaConns: []net.Conn{},
 		},
 		clientConn: writer,
 	}, reader
@@ -354,11 +357,11 @@ func TestExecuteCommand(t *testing.T) {
 		},
 		{
 			inputCommand: command.PSync{ReplicationID: command.HARDCODE_REPL_ID, MasterOffset: "0"},
-			expectedRes:  []string{"+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n", string(command.GetHardedCodedEmptyRDBBytes())},
+			expectedRes:  []string{"+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n", fmt.Sprintf("$88\r\n%s", command.GetHardedCodedEmptyRDBBytes())},
 		},
 		{
 			inputCommand: command.Info{Payload: "replication"},
-			expectedRes:  []string{"$86\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:base\n\r\n"},
+			expectedRes:  []string{"$88\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:master\n\r\n"},
 		},
 	} {
 		t.Run(fmt.Sprintf("executing command %q should succeed", tc.inputCommand.String()), func(t *testing.T) {
