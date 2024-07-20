@@ -69,6 +69,10 @@ func (e commandExecutor) executeGet(get command.Get) error {
 		}
 	}
 
+	fmt.Println("data: ", responseString)
+	fmt.Println("responseString: ", responseString)
+	fmt.Println("conn: ", e.clientConn.RemoteAddr())
+
 	if _, err := e.clientConn.Write([]byte(responseString)); err != nil {
 		return fmt.Errorf("error writing reponse to GET command to client: %w", err)
 	}

@@ -306,7 +306,7 @@ func TestExecuteSet(t *testing.T) {
 // 			expectedInfo: "",
 // 		},
 // 		{
-// 			inputServer: &SlaveServer{
+// 			inputServer: &ReplicaServer{
 // 				BaseServer: BaseServer{
 // 					logger: log.NewNoOpLogger(),
 // 				},
@@ -324,6 +324,8 @@ func TestExecuteSet(t *testing.T) {
 // 		})
 // 	}
 // }
+
+// TODO: Looped tests for replica vs master with expected behavior
 
 func TestExecuteCommand(t *testing.T) {
 	for _, tc := range []struct {

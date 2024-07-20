@@ -46,13 +46,13 @@ func main() {
 			logger.Fatal("failed to run master server", zap.Error(err))
 		}
 	} else {
-		server, err := server.NewSlaveServer(*logger, replicaof, serverOpts)
+		server, err := server.NewReplicaServer(*logger, replicaof, serverOpts)
 		if err != nil {
-			logger.Fatal("failed to initialize slave server", zap.Error(err))
+			logger.Fatal("failed to initialize replica server", zap.Error(err))
 		}
 		err = server.Run(ctx)
 		if err != nil {
-			logger.Fatal("failed to run slave server", zap.Error(err))
+			logger.Fatal("failed to run replica server", zap.Error(err))
 		}
 	}
 

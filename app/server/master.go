@@ -31,6 +31,7 @@ func NewMasterServer(logger log.Logger, opts ServerOptions) (MasterServer, error
 }
 
 func (s *MasterServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) error {
+	s.Logger().Info(fmt.Sprintf("master executing command: %v", cmd))
 	err := commandExecutor{
 		server:     s,
 		clientConn: clientConn,

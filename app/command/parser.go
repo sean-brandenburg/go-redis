@@ -34,17 +34,30 @@ func NewParser(cmd string, logger log.Logger) (CommandParser, error) {
 	}, nil
 }
 
-func (parser *CommandParser) Parse() (Command, error) {
-	parsedArray, err := parser.parseArray()
-	if err != nil {
-		return nil, fmt.Errorf("error parsing command to array: %w", err)
+func (parser *CommandParser) Parse() ([]Command, error) {
+	parsedArrays := [][]any{}
+	for {
+		if parser.remainingTokens() == 0 {
+			break
+		}
+
+		parsedArray, err := parser.parseArray()
+		if err != nil {
+			return nil, fmt.Errorf("error parsing command to array: %w", err)
+		}
+		parsedArrays = append(parsedArrays, parsedArray)
 	}
 
-	if len(parsedArray) == 0 {
-		return nil, errors.New("err?")
+	commands := make([]Command, 0, len(parsedArrays))
+	for _, arr := range parsedArrays {
+		command, err := ToCommand(arr)
+		if err != nil {
+			return nil, err
+		}
+		commands = append(commands, command)
 	}
 
-	return ToCommand(parsedArray)
+	return commands, nil
 }
 
 func (parser *CommandParser) parseNext() (any, error) {
@@ -93,6 +106,8 @@ func (parser *CommandParser) parseNext() (any, error) {
 	return nil, fmt.Errorf("expected to parse an identified element, but got %q", token)
 }
 
+var OutOfTokensErr = errors.New("tried to access the next token, but no more tokens remain")
+
 func (parser CommandParser) peekNextToken() (string, error) {
 	parser.logger.Debug(
 		"peeking token while parsing command",
@@ -101,7 +116,7 @@ func (parser CommandParser) peekNextToken() (string, error) {
 		zap.Int("totalSize", len(parser.tokens)),
 	)
 	if parser.remainingTokens() == 0 {
-		return "", fmt.Errorf("no more elements! tried to get element %d with %d tokens", parser.curIdx+1, len(parser.tokens))
+		return "", fmt.Errorf("tried to get element %d with %d tokens: %w", parser.curIdx+1, len(parser.tokens), OutOfTokensErr)
 	}
 	token := parser.tokens[parser.curIdx]
 	return token, nil

@@ -77,7 +77,7 @@ func (s *BaseServer) NodeType() string {
 }
 
 // NOTE: The base server implementation of ExecuteCommand should only be used in tests
-// Otherwise we should use the MasterServer and SlaveServer implementations
+// Otherwise we should use the MasterServer and ReplicaServer implementations
 func (s *BaseServer) ExecuteCommand(clientConn net.Conn, command command.Command) error {
 	return commandExecutor{
 		server:     s,

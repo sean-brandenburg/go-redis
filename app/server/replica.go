@@ -10,33 +10,33 @@ import (
 	"go.uber.org/zap"
 )
 
-type SlaveServer struct {
+type ReplicaServer struct {
 	BaseServer
 
 	// The `hostname:port` string that should be used to connect
-	// to the master of this slave's replica set
+	// to the master of this replica's replica set
 	masterAddress string
 
 	masterConnection net.Conn
 }
 
-func NewSlaveServer(logger log.Logger, masterAddress string, opts ServerOptions) (SlaveServer, error) {
+func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOptions) (ReplicaServer, error) {
 	baseServer, err := NewBaseServer(logger, opts)
 	if err != nil {
-		return SlaveServer{}, fmt.Errorf("error initializing slave server: %w", err)
+		return ReplicaServer{}, fmt.Errorf("error initializing replica server: %w", err)
 	}
 
-	return SlaveServer{
+	return ReplicaServer{
 		BaseServer:    baseServer,
 		masterAddress: masterAddress,
 	}, nil
 }
 
-func (s *SlaveServer) NodeType() string {
+func (s *ReplicaServer) NodeType() string {
 	return "slave"
 }
 
-func (s *SlaveServer) Run(ctx context.Context) error {
+func (s *ReplicaServer) Run(ctx context.Context) error {
 	conn, err := net.Dial("tcp", s.masterAddress)
 	if err != nil {
 		return fmt.Errorf("failed to dial master at address %q: %s", s.masterAddress, err)
@@ -71,10 +71,12 @@ func (s *SlaveServer) Run(ctx context.Context) error {
 	}
 
 	// 3. The replica sends a PSYNC to master to get a replicationID
-	_, err = s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
+	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
 	if err != nil {
 		return fmt.Errorf("failed to send PSYNC to master at address %q: %s", s.masterAddress, err)
 	}
+
+	s.Logger().Info("received response to PSYNC command", zap.String("response", strRes))
 	// TODO: Parse the response to this cmd
 	// if res != "" {
 	// 	return fmt.Errorf("unexpected response to PSYNC to master at address %q: %s", s.masterAddress, err)
@@ -89,12 +91,17 @@ func (s *SlaveServer) Run(ctx context.Context) error {
 		},
 	)
 	go s.ConnectionHandler(ctx)
+
+	// Don't send responses back to the master since it's just propagating messages
+	go s.clientHandler(ctx, s.masterConnection, false)
+
 	go s.ExpiryLoop(ctx)
 
 	return nil
 }
 
-func (s *SlaveServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) error {
+func (s *ReplicaServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) error {
+	s.Logger().Info(fmt.Sprintf("replica executing command: %v", cmd))
 	err := commandExecutor{
 		server:     s,
 		clientConn: clientConn,
@@ -106,7 +113,7 @@ func (s *SlaveServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) e
 	return nil
 }
 
-func (s *SlaveServer) SendCommandToMaster(ctx context.Context, cmd command.Command) (string, error) {
+func (s *ReplicaServer) SendCommandToMaster(ctx context.Context, cmd command.Command) (string, error) {
 	encodedCmd, err := cmd.EncodedCommand()
 	if err != nil {
 		return "", fmt.Errorf("failed to encode command %v: %s", cmd, err)

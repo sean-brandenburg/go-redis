@@ -143,42 +143,48 @@ func TestParseArray(t *testing.T) {
 func TestParse(t *testing.T) {
 	for _, tc := range []struct {
 		rawCmdString string
-		expectedCmd  Command
+		expectedCmds []Command
 	}{
 		{
 			// NOTE: This test also checks for the case insensitivity of command parsing
 			rawCmdString: "*1\r\n$4\r\nPiNg\r\n",
-			expectedCmd:  Ping{},
+			expectedCmds: []Command{Ping{}},
 		},
 		{
 			rawCmdString: "*2\r\n$4\r\nECHO\r\n$4\r\ntest\r\n",
-			expectedCmd:  Echo{Payload: "test"},
+			expectedCmds: []Command{Echo{Payload: "test"}},
 		},
 		{
 			rawCmdString: "*3\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n",
-			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow"},
+			expectedCmds: []Command{Set{KeyPayload: "banana", ValuePayload: "yellow"}},
 		},
 		{
 			// NOTE: This also checks that px is case insensitive
 			rawCmdString: "*5\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n$2\r\npX\r\n$3\r\n100\r\n",
-			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTimeMs: int64(100)},
+			expectedCmds: []Command{Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTimeMs: int64(100)}},
 		},
 		{
 			rawCmdString: "*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",
-			expectedCmd:  Get{Payload: "banana"},
+			expectedCmds: []Command{Get{Payload: "banana"}},
 		},
 		{
 			rawCmdString: "*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n",
-			expectedCmd:  Info{Payload: "replication"},
+			expectedCmds: []Command{Info{Payload: "replication"}},
+		},
+
+		// Multiple commands in a single request
+		{
+			rawCmdString: "*2\r\n$4\r\nECHO\r\n$4\r\ntest\r\n*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",
+			expectedCmds: []Command{Echo{Payload: "test"}, Get{Payload: "banana"}},
 		},
 	} {
-		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmd), func(t *testing.T) {
+		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmds), func(t *testing.T) {
 			parser, err := NewParser(tc.rawCmdString, log.NewNoOpLogger())
 			assert.NoError(t, err)
 
 			cmd, err := parser.Parse()
 			assert.NoError(t, err)
-			assert.Equal(t, tc.expectedCmd, cmd)
+			assert.Equal(t, tc.expectedCmds, cmd)
 		})
 	}
 }

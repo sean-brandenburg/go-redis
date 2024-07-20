@@ -8,4 +8,8 @@ type Event struct {
 
 	// The client connection that the server should send the response to
 	ClientConn net.Conn
+
+	// If true, the server should send a response to the client. Otherwise, the server should
+	// execute the command without sending anything back to the caller
+	ShouldRespond bool
 }

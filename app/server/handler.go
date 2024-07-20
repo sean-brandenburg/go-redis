@@ -47,17 +47,19 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, ex
 				logger.Error("error building parser from client command", zap.Error(err))
 				continue
 			}
-			cmd, err := parser.Parse()
+			cmds, err := parser.Parse()
 			if err != nil {
 				logger.Error("error parsing client command", zap.Error(err))
 				continue
 			}
 
-			logger.Info("executing command", zap.Stringer("command", cmd))
-			err = execute(event.ClientConn, cmd)
-			if err != nil {
-				logger.Error("error executing client command", zap.Error(err))
-				continue
+			for _, cmd := range cmds {
+				logger.Info("executing commands", zap.Stringer("command", cmd))
+				err = execute(event.ClientConn, cmd)
+				if err != nil {
+					logger.Error("error executing client command", zap.Error(err))
+					continue
+				}
 			}
 		}
 	}
@@ -119,13 +121,13 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 			continue
 		}
 
-		go s.clientHandler(ctx, clientConn)
+		go s.clientHandler(ctx, clientConn, true)
 	}
 }
 
 // clienHandler is responsible for reading messages off of a connection and turning them into events
 // which are then placedon the event queue
-func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn) {
+func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn, shouldRespond bool) {
 	defer conn.Close()
 	s.logger.Info(
 		"starting client handler",
@@ -151,8 +153,9 @@ func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn) {
 		s.logger.Info("received command", zap.String("command", command))
 
 		s.eventQueue <- Event{
-			Command:    command,
-			ClientConn: conn,
+			Command:       command,
+			ClientConn:    conn,
+			ShouldRespond: shouldRespond,
 		}
 	}
 }
