@@ -106,8 +106,6 @@ func (parser *CommandParser) parseNext() (any, error) {
 	return nil, fmt.Errorf("expected to parse an identified element, but got %q", token)
 }
 
-var OutOfTokensErr = errors.New("tried to access the next token, but no more tokens remain")
-
 func (parser CommandParser) peekNextToken() (string, error) {
 	parser.logger.Debug(
 		"peeking token while parsing command",
@@ -116,8 +114,9 @@ func (parser CommandParser) peekNextToken() (string, error) {
 		zap.Int("totalSize", len(parser.tokens)),
 	)
 	if parser.remainingTokens() == 0 {
-		return "", fmt.Errorf("tried to get element %d with %d tokens: %w", parser.curIdx+1, len(parser.tokens), OutOfTokensErr)
+		return "", fmt.Errorf("no more elements! tried to get element %d with %d tokens", parser.curIdx+1, len(parser.tokens))
 	}
+
 	token := parser.tokens[parser.curIdx]
 	return token, nil
 }
