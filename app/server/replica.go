@@ -70,8 +70,8 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
 
-	// I think this should not start until after we send the PSYNC to master, but the tests seem to exepct that the replicas are
-	// able to respond right after the psync
+	// 3. Start the event/connection handling for the replica before we PSYNC back to the master
+	// since the tests expect that we are immediately ready to start handling connections after we respond
 	go EventLoop(
 		ctx,
 		s.logger,
@@ -82,22 +82,17 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	)
 	go s.ConnectionHandler(ctx)
 
-	// 3. The replica sends a PSYNC to master to get a replicationID
+	go s.ExpiryLoop(ctx)
+
+	// 4. The replica sends a PSYNC to master to get a replicationID
 	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
 	if err != nil {
 		return fmt.Errorf("failed to send PSYNC to master at address %q: %s", s.masterAddress, err)
 	}
-
 	s.Logger().Info("received response to PSYNC command", zap.String("response", strRes))
-	// TODO: Parse the response to this cmd
-	// if res != "" {
-	// 	return fmt.Errorf("unexpected response to PSYNC to master at address %q: %s", s.masterAddress, err)
-	// }
 
-	// Don't send responses back to the master since it's just propagating messages
+	// Start the clientHandler for the master, but don't send responses back to the master since it's just propagating messages
 	go s.clientHandler(ctx, s.masterConnection, false)
-
-	go s.ExpiryLoop(ctx)
 
 	return nil
 }
