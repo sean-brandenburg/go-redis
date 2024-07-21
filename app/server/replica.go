@@ -43,35 +43,11 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 	s.masterConnection = conn
 
-	// 0. The replica sends a ping to it's master
-	res, err := s.SendCommandToMaster(ctx, &command.Ping{})
-	if err != nil {
-		return fmt.Errorf("failed to PING master at address %q: %s", s.masterAddress, err)
-	}
-	if res != "+PONG\r\n" {
-		return fmt.Errorf("unexpected response to PING to master at address %q: %s", s.masterAddress, err)
-	}
-
-	// 1. The replica sends it's port as a REPLCONF
-	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{KeyPayload: "listening-port", ValuePayload: fmt.Sprintf("%d", s.listenerPort)})
-	if err != nil {
-		return fmt.Errorf("failed to send first REPLCONF to master at address %q: %s", s.masterAddress, err)
-	}
-	if res != command.OKString {
-		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
-	}
-
-	// 2. The replica sends it's capabilities
-	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{KeyPayload: "capa", ValuePayload: "psync2"})
-	if err != nil {
-		return fmt.Errorf("failed to send first REPLCONF to master at address %q: %s", s.masterAddress, err)
-	}
-	if res != command.OKString {
-		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
-	}
-
-	// 3. Start the event/connection handling for the replica before we PSYNC back to the master
+	// 0. Start the event/connection handling for the replica before we sync with the master
 	// since the tests expect that we are immediately ready to start handling connections after we respond
+	//
+	// In the real world though, I would want this to be after we've synchronized with the mater so that a client won't
+	// be able to connect and read before we have a consistent state
 	go EventLoop(
 		ctx,
 		s.logger,
@@ -83,6 +59,33 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	go s.ConnectionHandler(ctx)
 
 	go s.ExpiryLoop(ctx)
+
+	// 1. The replica sends a ping to it's master
+	res, err := s.SendCommandToMaster(ctx, &command.Ping{})
+	if err != nil {
+		return fmt.Errorf("failed to PING master at address %q: %s", s.masterAddress, err)
+	}
+	if res != "+PONG\r\n" {
+		return fmt.Errorf("unexpected response to PING to master at address %q: %s", s.masterAddress, err)
+	}
+
+	// 2. The replica sends it's port as a REPLCONF
+	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{KeyPayload: "listening-port", ValuePayload: fmt.Sprintf("%d", s.listenerPort)})
+	if err != nil {
+		return fmt.Errorf("failed to send first REPLCONF to master at address %q: %s", s.masterAddress, err)
+	}
+	if res != command.OKString {
+		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
+	}
+
+	// 3. The replica sends it's capabilities
+	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{KeyPayload: "capa", ValuePayload: "psync2"})
+	if err != nil {
+		return fmt.Errorf("failed to send first REPLCONF to master at address %q: %s", s.masterAddress, err)
+	}
+	if res != command.OKString {
+		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
+	}
 
 	// 4. The replica sends a PSYNC to master to get a replicationID
 	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
