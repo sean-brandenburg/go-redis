@@ -70,6 +70,18 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
 
+	// I think this should not start until after we send the PSYNC to master, but the tests seem to exepct that the replicas are
+	// able to respond right after the psync
+	go EventLoop(
+		ctx,
+		s.logger,
+		s.eventQueue,
+		func(clientConn net.Conn, cmd command.Command) error {
+			return s.ExecuteCommand(clientConn, cmd)
+		},
+	)
+	go s.ConnectionHandler(ctx)
+
 	// 3. The replica sends a PSYNC to master to get a replicationID
 	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
 	if err != nil {
@@ -81,16 +93,6 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	// if res != "" {
 	// 	return fmt.Errorf("unexpected response to PSYNC to master at address %q: %s", s.masterAddress, err)
 	// }
-
-	go EventLoop(
-		ctx,
-		s.logger,
-		s.eventQueue,
-		func(clientConn net.Conn, cmd command.Command) error {
-			return s.ExecuteCommand(clientConn, cmd)
-		},
-	)
-	go s.ConnectionHandler(ctx)
 
 	// Don't send responses back to the master since it's just propagating messages
 	go s.clientHandler(ctx, s.masterConnection, false)
