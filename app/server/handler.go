@@ -3,12 +3,12 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
-	"go.uber.org/zap"
 )
 
 const (
@@ -26,7 +26,15 @@ const (
 	MaxMessageSize = 512
 )
 
-type ExecuteCommand func(clientConn net.Conn, cmd command.Command) error
+type ExecuteCommand func(conn Connection, cmd command.Command) error
+
+type Event struct {
+	// The event string to be handled
+	Command string
+
+	// The client connection that this event came from
+	Conn Connection
+}
 
 func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, execute ExecuteCommand) {
 	logger.Info("starting event loop")
@@ -39,7 +47,7 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, ex
 			logger.Info(
 				"processing event",
 				zap.String("command", event.Command),
-				zap.Stringer("remoteAddress", event.ClientConn.RemoteAddr()),
+				zap.Stringer("remoteAddress", event.Conn.RemoteAddr()),
 			)
 
 			parser, err := command.NewParser(event.Command, logger)
@@ -55,7 +63,7 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, ex
 
 			for _, cmd := range cmds {
 				logger.Info("executing commands", zap.Stringer("command", cmd))
-				err = execute(event.ClientConn, cmd)
+				err = execute(event.Conn, cmd)
 				if err != nil {
 					logger.Error("error executing client command", zap.Error(err))
 					continue
@@ -121,13 +129,13 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 			continue
 		}
 
-		go s.clientHandler(ctx, clientConn, true)
+		go s.clientHandler(ctx, ConnWithType{Conn: clientConn, ConnType: ClientConnection})
 	}
 }
 
 // clienHandler is responsible for reading messages off of a connection and turning them into events
-// which are then placedon the event queue
-func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn, shouldRespond bool) {
+// which are then placed on the event queue
+func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
 	defer conn.Close()
 	s.logger.Info(
 		"starting client handler",
@@ -153,9 +161,8 @@ func (s BaseServer) clientHandler(ctx context.Context, conn net.Conn, shouldResp
 		s.logger.Info("received command", zap.String("command", command))
 
 		s.eventQueue <- Event{
-			Command:       command,
-			ClientConn:    conn,
-			ShouldRespond: shouldRespond,
+			Command: command,
+			Conn:    conn,
 		}
 	}
 }
@@ -166,7 +173,7 @@ func GetServerInfo(server Server, infoType string) (map[string]string, error) {
 	}
 
 	return map[string]string{
-		"role":               server.NodeType(),
+		"role":               string(server.NodeType()),
 		"master_repl_offset": "0",
 		"master_replid":      command.HARDCODE_REPL_ID,
 	}, nil

@@ -16,8 +16,8 @@ type MasterServer struct {
 	registeredReplicaConns []net.Conn
 }
 
-func (s *MasterServer) NodeType() string {
-	return "master"
+func (s *MasterServer) NodeType() NodeType {
+	return MasterNodeType
 }
 
 func NewMasterServer(logger log.Logger, opts ServerOptions) (MasterServer, error) {
@@ -30,12 +30,9 @@ func NewMasterServer(logger log.Logger, opts ServerOptions) (MasterServer, error
 	}, nil
 }
 
-func (s *MasterServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) error {
+func (s *MasterServer) ExecuteCommand(conn Connection, cmd command.Command) error {
 	s.Logger().Info(fmt.Sprintf("master executing command: %v", cmd))
-	err := commandExecutor{
-		server:     s,
-		clientConn: clientConn,
-	}.execute(cmd)
+	err := RunCommand(s, conn, cmd)
 	if err != nil {
 		return fmt.Errorf("error executing command: %w", err)
 	}
@@ -75,7 +72,7 @@ func (s *MasterServer) Run(ctx context.Context) error {
 		ctx,
 		s.logger,
 		s.eventQueue,
-		func(clientConn net.Conn, cmd command.Command) error {
+		func(clientConn Connection, cmd command.Command) error {
 			return s.ExecuteCommand(clientConn, cmd)
 		},
 	)
@@ -83,4 +80,8 @@ func (s *MasterServer) Run(ctx context.Context) error {
 	go s.ExpiryLoop(ctx)
 
 	return nil
+}
+
+func (s *MasterServer) IsSteadyState() bool {
+	return true
 }

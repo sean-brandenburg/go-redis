@@ -24,12 +24,13 @@ func NewLogger(logFile string, level zapcore.Level) (*Logger, error) {
 		config.OutputPaths = append(config.OutputPaths, fmt.Sprint("./logs/", logFile))
 	}
 
-	logger, err := config.Build(zap.AddCaller(), zap.AddCallerSkip(1))
+	logger, err := config.Build(zap.AddCaller())
 	if err != nil {
 		return nil, err
 	}
 	return &Logger{zap: logger}, err
 }
+
 func NewNoOpLogger() Logger {
 	return Logger{zap: noOpLogger}
 }

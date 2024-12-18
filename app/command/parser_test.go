@@ -5,8 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/codecrafters-io/redis-starter-go/app/log"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
 func TestParseSimpleString(t *testing.T) {

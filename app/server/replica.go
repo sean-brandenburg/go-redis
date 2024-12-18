@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net"
 
+	"go.uber.org/zap"
+
 	"github.com/codecrafters-io/redis-starter-go/app/command"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
-	"go.uber.org/zap"
 )
 
 type ReplicaServer struct {
@@ -18,6 +19,8 @@ type ReplicaServer struct {
 	masterAddress string
 
 	masterConnection net.Conn
+
+	steadyState bool
 }
 
 func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOptions) (ReplicaServer, error) {
@@ -29,11 +32,12 @@ func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOption
 	return ReplicaServer{
 		BaseServer:    baseServer,
 		masterAddress: masterAddress,
+		steadyState:   false,
 	}, nil
 }
 
-func (s *ReplicaServer) NodeType() string {
-	return "slave"
+func (s *ReplicaServer) NodeType() NodeType {
+	return ReplicaNodeType
 }
 
 func (s *ReplicaServer) Run(ctx context.Context) error {
@@ -52,8 +56,8 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		ctx,
 		s.logger,
 		s.eventQueue,
-		func(clientConn net.Conn, cmd command.Command) error {
-			return s.ExecuteCommand(clientConn, cmd)
+		func(conn Connection, cmd command.Command) error {
+			return s.ExecuteCommand(conn, cmd)
 		},
 	)
 	go s.ConnectionHandler(ctx)
@@ -87,6 +91,9 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
 
+	// TODO: Some kind of race condition here where the master expects to be able to connect as soon as it's sent the PSYNC
+	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
+
 	// 4. The replica sends a PSYNC to master to get a replicationID
 	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
 	if err != nil {
@@ -94,18 +101,13 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 	s.Logger().Info("received response to PSYNC command", zap.String("response", strRes))
 
-	// Start the clientHandler for the master, but don't send responses back to the master since it's just propagating messages
-	go s.clientHandler(ctx, s.masterConnection, false)
-
 	return nil
 }
 
-func (s *ReplicaServer) ExecuteCommand(clientConn net.Conn, cmd command.Command) error {
+func (s *ReplicaServer) ExecuteCommand(conn Connection, cmd command.Command) error {
 	s.Logger().Info(fmt.Sprintf("replica executing command: %v", cmd))
-	err := commandExecutor{
-		server:     s,
-		clientConn: clientConn,
-	}.execute(cmd)
+
+	err := RunCommand(s, conn, cmd)
 	if err != nil {
 		return fmt.Errorf("error executing command: %w", err)
 	}
@@ -138,4 +140,12 @@ func (s *ReplicaServer) SendCommandToMaster(ctx context.Context, cmd command.Com
 	)
 
 	return strRes, nil
+}
+
+func (s *ReplicaServer) IsSteadyState() bool {
+	return s.steadyState
+}
+
+func (s *ReplicaServer) SetIsSteadyState(steadyState bool) {
+	s.steadyState = steadyState
 }

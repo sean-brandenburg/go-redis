@@ -2,6 +2,8 @@ package command
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 type ReplConf struct {
@@ -16,6 +18,21 @@ func (conf ReplConf) String() string {
 func (conf ReplConf) EncodedCommand() (string, error) {
 	e := Encoder{UseBulkStrings: true}
 	return e.Encode([]any{string(replConfCmd), conf.KeyPayload, conf.ValuePayload})
+}
+
+func (conf ReplConf) IsGetAck() bool {
+	return strings.ToLower(conf.KeyPayload) == "getack" && conf.ValuePayload == "*"
+}
+
+func (conf ReplConf) IsListeningPort() bool {
+	return strings.ToLower(conf.KeyPayload) == "listening-port"
+}
+
+func (conf ReplConf) IsAck() bool {
+	if _, err := strconv.ParseInt(conf.ValuePayload, 10, 64); err == nil {
+		return strings.ToLower(conf.KeyPayload) == "ack"
+	}
+	return false
 }
 
 func toReplConf(data []any) (ReplConf, error) {

@@ -10,24 +10,39 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
+type NodeType string
+
+const (
+	MasterNodeType  NodeType = "master"
+	ReplicaNodeType NodeType = "slave"
+	BaseNodeType    NodeType = "base"
+)
+
 type Server interface {
 	// Run the server
 	Run(ctx context.Context) error
 
-	// Execute a command on this server
-	ExecuteCommand(clientConn net.Conn, command command.Command) error
+	// ExecuteCommand runs a command on this server
+	ExecuteCommand(conn Connection, command command.Command) error
 
 	// Set sets a key in the server's store
 	Set(key string, value any, expiryTimeMs int64)
 
-	// Get's a value from the server's store and returns a bool
+	// Get fetches a value from the server's store and returns a bool
 	// indicating whether or not the key was found
 	Get(key string) (any, bool)
 
-	// Returns the number of strings in the store
+	// Size Returns the number of items in the store
 	Size() int
 
-	NodeType() string
+	// Logger returns this server's logger
+	Logger() log.Logger
+
+	// NodeType returns the type of this server
+	NodeType() NodeType
+
+	// IsSteadyState is true if a server is up and ready to receive requests
+	IsSteadyState() bool
 }
 
 type BaseServer struct {
@@ -72,19 +87,20 @@ func (s *BaseServer) Logger() log.Logger {
 	return s.logger
 }
 
-func (s *BaseServer) NodeType() string {
-	return "base"
+func (s *BaseServer) NodeType() NodeType {
+	return BaseNodeType
 }
 
 // NOTE: The base server implementation of ExecuteCommand should only be used in tests
 // Otherwise we should use the MasterServer and ReplicaServer implementations
-func (s *BaseServer) ExecuteCommand(clientConn net.Conn, command command.Command) error {
-	return commandExecutor{
-		server:     s,
-		clientConn: clientConn,
-	}.execute(command)
+func (s *BaseServer) ExecuteCommand(conn Connection, command command.Command) error {
+	return RunCommand(s, conn, command)
 }
 
 func (s *BaseServer) Run(ctx context.Context) error {
 	return fmt.Errorf("the base server's run should not be used and exists only to fulfill the Server interface to simplify testing")
+}
+
+func (s *BaseServer) IsSteadyState() bool {
+	return true
 }
