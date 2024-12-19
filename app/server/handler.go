@@ -138,7 +138,7 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
 	defer conn.Close()
 	s.logger.Info(
-		"starting client handler",
+		fmt.Sprintf("starting client handler for server of type %q", s.NodeType()),
 		zap.Stringer("remoteAddress", conn.RemoteAddr()),
 	)
 

@@ -91,15 +91,14 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
 
-	// TODO: Some kind of race condition here where the master expects to be able to connect as soon as it's sent the PSYNC
-	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
-
 	// 4. The replica sends a PSYNC to master to get a replicationID
 	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
 	if err != nil {
 		return fmt.Errorf("failed to send PSYNC to master at address %q: %s", s.masterAddress, err)
 	}
 	s.Logger().Info("received response to PSYNC command", zap.String("response", strRes))
+
+	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
 
 	return nil
 }
