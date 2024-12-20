@@ -3,16 +3,16 @@ package main
 import (
 	"context"
 	"flag"
+	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
-	"os"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 	"github.com/codecrafters-io/redis-starter-go/app/server"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 func main() {
@@ -36,16 +36,22 @@ func main() {
 	serverOpts := server.ServerOptions{
 		Port: port,
 	}
+
+	logger.AddMetadata(zap.Int("serverListenPort", *port))
+
 	if replicaof == "" {
+		logger.AddMetadata(zap.String("nodeType", string(server.MasterNodeType)))
 		server, err := server.NewMasterServer(*logger, serverOpts)
 		if err != nil {
 			logger.Fatal("failed to initialize master server", zap.Error(err))
 		}
+
 		err = server.Run(ctx)
 		if err != nil {
 			logger.Fatal("failed to run master server", zap.Error(err))
 		}
 	} else {
+		logger.AddMetadata(zap.String("nodeType", string(server.ReplicaNodeType)))
 		server, err := server.NewReplicaServer(*logger, replicaof, serverOpts)
 		if err != nil {
 			logger.Fatal("failed to initialize replica server", zap.Error(err))

@@ -23,7 +23,7 @@ const (
 	eventQueueSize = 10
 
 	// Max bytes in a message
-	MaxMessageSize = 512
+	MaxMessageSize = 1028
 )
 
 type ExecuteCommand func(conn Connection, cmd command.Command) error
@@ -114,7 +114,7 @@ func (s BaseServer) ExpiryLoop(ctx context.Context) {
 
 // ConnectionHandler listens for new pending connections and starts up a clientHandler goroutine for each new connection
 func (s BaseServer) ConnectionHandler(ctx context.Context) {
-	s.logger.Info(fmt.Sprintf("starting connection handler at %q", s.listener.Addr()))
+	s.logger.Info("starting connection handler at %q", zap.Stringer("connectionAddr", s.listener.Addr()))
 	for {
 		select {
 		case <-ctx.Done():
@@ -137,10 +137,7 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 // which are then placed on the event queue
 func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
 	defer conn.Close()
-	s.logger.Info(
-		fmt.Sprintf("starting client handler for server of type %q", s.NodeType()),
-		zap.Stringer("remoteAddress", conn.RemoteAddr()),
-	)
+	s.logger.Info("starting client handler", zap.Stringer("remoteAddress", conn.RemoteAddr()))
 
 	for {
 		select {
@@ -148,21 +145,20 @@ func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
 			s.logger.Error("client handler exiting", zap.Error(ctx.Err()))
 			return
 		default:
-		}
+			data := make([]byte, MaxMessageSize)
+			bytesRead, err := conn.Read(data)
+			if err != nil {
+				s.logger.Error("error reading from client connection", zap.Error(err))
+				return
+			}
 
-		data := make([]byte, MaxMessageSize)
-		bytesRead, err := conn.Read(data)
-		if err != nil {
-			s.logger.Error("error reading from client connection", zap.Error(err))
-			return
-		}
+			command := string(data[:bytesRead])
+			s.logger.Info("received command", zap.String("command", command))
 
-		command := string(data[:bytesRead])
-		s.logger.Info("received command", zap.String("command", command))
-
-		s.eventQueue <- Event{
-			Command: command,
-			Conn:    conn,
+			s.eventQueue <- Event{
+				Command: command,
+				Conn:    conn,
+			}
 		}
 	}
 }

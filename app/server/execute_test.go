@@ -42,6 +42,16 @@ func getTestMasterServer(initialData serverStore) Server {
 	}
 }
 
+func getTestReplicaServer(initialData serverStore) Server {
+	return &ReplicaServer{
+		BaseServer: BaseServer{
+			storeData:   initialData,
+			storeDataMu: &sync.Mutex{},
+			logger:      log.NewNoOpLogger(),
+		},
+	}
+}
+
 func runCommandAndCheckOutput(t *testing.T, cmd command.Command, expectedOutput string) {
 	runCommandAndCheckOutputWithServer(t, getTestMasterServer(serverStore{}), cmd, expectedOutput)
 }
@@ -60,11 +70,7 @@ func runCommandAndCheckOutputsWithServer(t *testing.T, srv Server, cmd command.C
 
 	writer, reader := net.Pipe()
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-
 	go func() {
-		defer wg.Done()
 		err := RunCommand(
 			srv,
 			ConnWithType{
@@ -84,8 +90,6 @@ func runCommandAndCheckOutputsWithServer(t *testing.T, srv Server, cmd command.C
 		assert.Nil(t, err, errContextMsg)
 		assert.Equal(t, expectedMessage, string(res[:numBytes]), errContextMsg)
 	}
-
-	wg.Wait()
 }
 
 func TestExecutePing(t *testing.T) {
@@ -237,22 +241,24 @@ func TestExecuteReplConf(t *testing.T) {
 	for _, tc := range []struct {
 		key         string
 		value       string
+		server      Server
 		expectedRes string
 	}{
 		{
-			key:         "c",
-			value:       "d",
+			key:         "capa",
+			value:       "psync2",
+			server:      getTestMasterServer(serverStore{}),
 			expectedRes: command.OKString,
 		},
-
 		{
 			key:         "GetAck",
 			value:       "*",
-			expectedRes: "*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n",
+			server:      getTestReplicaServer(serverStore{}),
+			expectedRes: "*3\r\n+REPLCONF\r\n+ACK\r\n+0\r\n",
 		},
 	} {
 		t.Run(fmt.Sprintf("PSYNC with key %q and value %q should return the expected res", tc.key, tc.value), func(t *testing.T) {
-			runCommandAndCheckOutput(t, command.ReplConf{KeyPayload: tc.key, ValuePayload: tc.value}, tc.expectedRes)
+			runCommandAndCheckOutputWithServer(t, tc.server, command.ReplConf{Payload: []string{tc.key, tc.value}}, tc.expectedRes)
 		})
 	}
 }

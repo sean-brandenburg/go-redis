@@ -1,9 +1,12 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
+	"strconv"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -74,7 +77,7 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 
 	// 2. The replica sends it's port as a REPLCONF
-	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{KeyPayload: "listening-port", ValuePayload: fmt.Sprintf("%d", s.listenerPort)})
+	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{Payload: []string{"listening-port", strconv.Itoa(s.listenerPort)}})
 	if err != nil {
 		return fmt.Errorf("failed to send first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
@@ -83,7 +86,7 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 
 	// 3. The replica sends it's capabilities
-	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{KeyPayload: "capa", ValuePayload: "psync2"})
+	res, err = s.SendCommandToMaster(ctx, &command.ReplConf{Payload: []string{"capa", "psync2"}})
 	if err != nil {
 		return fmt.Errorf("failed to send first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
@@ -91,12 +94,48 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		return fmt.Errorf("unexpected response to first REPLCONF to master at address %q: %s", s.masterAddress, err)
 	}
 
-	// 4. The replica sends a PSYNC to master to get a replicationID
-	strRes, err := s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
+	// 4a. The replica sends a PSYNC to master to get a replicationID
+	psync := command.PSync{ReplicationID: "?", MasterOffset: "-1"}
+	encodedCmd, err := psync.EncodedCommand()
 	if err != nil {
-		return fmt.Errorf("failed to send PSYNC to master at address %q: %s", s.masterAddress, err)
+		return fmt.Errorf("failed to encode command %v: %s", psync, err)
 	}
-	s.Logger().Info("received response to PSYNC command", zap.String("response", strRes))
+	_, err = s.masterConnection.Write([]byte(encodedCmd))
+	if err != nil {
+		return fmt.Errorf("failed to write command %q to master at address %q: %s", encodedCmd, s.masterAddress, err)
+	}
+
+	// 4b. Read off the FULLRESYNC
+	r := bufio.NewReader(s.masterConnection)
+	fullResyncMsg, err := r.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read PSYNC response FULLRESYNC for command from master at address %q: %s", s.masterAddress, err)
+	}
+	s.Logger().Info("received response to PSYNC command", zap.String("response", fullResyncMsg))
+
+	// 4c. Read off the size of the RDB file. Should get a response like $88\r\n
+	RDBFileSize, err := r.ReadString('\n')
+	s.Logger().Info("received RDB file size string", zap.String("data", RDBFileSize))
+
+	if err != nil {
+		return fmt.Errorf("failed to read PSYNC response FULLRESYNC for command from master at address %q: %s", s.masterAddress, err)
+	}
+
+	// 4d. String should now look like $88
+	trimmedRDBFileSizeStr := strings.TrimSuffix(RDBFileSize, "\r\n")
+	bytesToRead, err := command.ParseIntWithPrefix(trimmedRDBFileSizeStr, "$")
+	if err != nil {
+		return fmt.Errorf("RDB file response to PSYNC did not contain an int size in its header: %q", trimmedRDBFileSizeStr)
+	}
+
+	// 4e. Read the expected number of bytes
+	buf := make([]byte, bytesToRead)
+	rdbData, err := r.Read(buf)
+	if err != nil {
+		return fmt.Errorf("error reading RDB data: %w", err)
+	}
+
+	s.Logger().Info("received RDB data", zap.String("data", string(buf[:rdbData])))
 
 	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
 
@@ -125,7 +164,7 @@ func (s *ReplicaServer) SendCommandToMaster(ctx context.Context, cmd command.Com
 		return "", fmt.Errorf("failed to write command %q to master at address %q: %s", encodedCmd, s.masterAddress, err)
 	}
 
-	rawRes := make([]byte, 512)
+	rawRes := make([]byte, MaxMessageSize)
 	bytesRead, err := s.masterConnection.Read(rawRes)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response for command from master at address %q: %s", s.masterAddress, err)

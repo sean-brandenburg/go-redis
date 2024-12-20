@@ -12,7 +12,8 @@ import (
 )
 
 func RunCommand(server Server, conn Connection, cmd command.Command) error {
-	if server.NodeType() == ReplicaNodeType && server.IsSteadyState() {
+	cmdIsFromMaster := conn.ConnectionType() == MasterConnection && server.NodeType() == ReplicaNodeType
+	if cmdIsFromMaster && server.IsSteadyState() {
 		// Once in steady state, replica nodes should only reply to replconf messages so set the conn to Noop
 		if _, ok := cmd.(command.ReplConf); !ok {
 			conn = LogNoopConn{
@@ -137,13 +138,21 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 	switch nodeType {
 	case MasterNodeType:
 		if replConf.IsAck() {
-			e.server.Logger().Info("Master node received ACK from replica", zap.String("offset", replConf.ValuePayload))
+			e.server.Logger().Info("Master node received ACK from replica", zap.String("offset", replConf.Payload[1]))
 			return nil
+		} else if replConf.IsListeningPort() {
+			if _, err := e.conn.Write([]byte(command.OKString)); err != nil {
+				return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
+			}
+			return nil
+		} else if replConf.IsCapa() {
+			if _, err := e.conn.Write([]byte(command.OKString)); err != nil {
+				return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
+			}
 		}
 	case ReplicaNodeType:
 		if replConf.IsGetAck() {
-			encoder := command.Encoder{UseBulkStrings: true}
-			res, err := encoder.Encode([]any{"REPLCONF", "ACK", "0"})
+			res, err := command.Encoder{}.Encode([]any{"REPLCONF", "ACK", "0"})
 			if err != nil {
 				return fmt.Errorf("error encoding response for REPLCONF ACK command: %w", err)
 			}
@@ -156,13 +165,9 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 			if !ok {
 				return errors.New("REPLCONF GETACK processed for node with type ReplicaNode, but failed to cast to ReplicaServer")
 			}
+
 			replica.SetIsSteadyState(true)
 
-			return nil
-		} else if replConf.IsListeningPort() {
-			if _, err := e.conn.Write([]byte(command.OKString)); err != nil {
-				return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
-			}
 			return nil
 		}
 	}

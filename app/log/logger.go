@@ -10,7 +10,8 @@ import (
 var noOpLogger = zap.NewNop()
 
 type Logger struct {
-	zap *zap.Logger
+	zap      *zap.Logger
+	metadata []zap.Field
 }
 
 // TODO: Would be nice to make a clone function so that we can clone this logger then attach zap fields to it
@@ -28,7 +29,14 @@ func NewLogger(logFile string, level zapcore.Level) (*Logger, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Logger{zap: logger}, err
+	return &Logger{
+		zap:      logger,
+		metadata: []zap.Field{},
+	}, err
+}
+
+func (l *Logger) AddMetadata(data ...zap.Field) {
+	l.metadata = append(l.metadata, data...)
 }
 
 func NewNoOpLogger() Logger {
@@ -40,23 +48,23 @@ func (l *Logger) Close() {
 }
 
 func (l Logger) Debug(msg string, fields ...zap.Field) {
-	l.writer().Debug(msg, fields...)
+	l.writer().Debug(msg, append(fields, l.metadata...)...)
 }
 
 func (l Logger) Info(msg string, fields ...zap.Field) {
-	l.writer().Info(msg, fields...)
+	l.writer().Info(msg, append(fields, l.metadata...)...)
 }
 
 func (l Logger) Warn(msg string, fields ...zap.Field) {
-	l.writer().Warn(msg, fields...)
+	l.writer().Warn(msg, append(fields, l.metadata...)...)
 }
 
 func (l Logger) Error(msg string, fields ...zap.Field) {
-	l.writer().Warn(msg, fields...)
+	l.writer().Error(msg, append(fields, l.metadata...)...)
 }
 
 func (l Logger) Fatal(msg string, fields ...zap.Field) {
-	l.writer().Warn(msg, fields...)
+	l.writer().Fatal(msg, append(fields, l.metadata...)...)
 }
 
 func (l Logger) writer() *zap.Logger {
