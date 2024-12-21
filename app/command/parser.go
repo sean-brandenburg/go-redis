@@ -44,8 +44,8 @@ func (parser *CommandParser) Parse() ([]Command, error) {
 
 		parsedElem, err := parser.parseNext()
 		if err != nil {
-			parser.logger.Warn("Failed to parse command, Ignoring", zap.Error(err))
-			continue
+			parser.logger.Error("Failed to parse command, Ignoring", zap.Error(err))
+			return nil, errors.New("failed to parse command")
 		}
 		parsedCmdInputs = append(parsedCmdInputs, parsedElem)
 	}
@@ -60,7 +60,8 @@ func (parser *CommandParser) Parse() ([]Command, error) {
 			}
 			commands = append(commands, command)
 		default:
-			parser.logger.Warn("received a non []any command input. Ignoring input", zap.Any("input", input))
+			parser.logger.Error("received a non []any command input. Ignoring input", zap.Any("input", input))
+			return nil, errors.New("failed to parse command")
 		}
 	}
 

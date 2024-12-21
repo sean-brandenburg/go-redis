@@ -23,7 +23,7 @@ const (
 	eventQueueSize = 10
 
 	// Max bytes in a message
-	MaxMessageSize = 1028
+	MaxMessageSize = 1024
 )
 
 type ExecuteCommand func(conn Connection, cmd command.Command) error

@@ -134,9 +134,9 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error reading RDB data: %w", err)
 	}
-
 	s.Logger().Info("received RDB data", zap.String("data", string(buf[:rdbData])))
 
+	// 5. Start up client handler for the master conn (TODO: The master expects this to already be up at this point sometimes)
 	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
 
 	return nil
