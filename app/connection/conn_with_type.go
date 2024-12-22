@@ -45,7 +45,6 @@ func (c ConnWithType) WriteString(data string) (int, error) {
 }
 
 func getBulkStringLength(rawStr string) (int64, error) {
-	// If we have a bulk string, we need to read off the specified number of bytes
 	bulkStringSizeWithPrefix := strings.TrimSuffix(rawStr, "\r\n")
 	bulkStringSize, err := command.ParseIntWithPrefix(bulkStringSizeWithPrefix, "$")
 	if err != nil {
