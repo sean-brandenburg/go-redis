@@ -9,13 +9,15 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 )
 
-func RunCommand(server Server, conn Connection, cmd command.Command) error {
+func RunCommand(server Server, conn connection.Connection, cmd command.Command) error {
 	if !server.ShouldRespondToCommand(conn, cmd) {
 		// Once in steady state, replica nodes should only reply to replconf messages so set the conn to Noop
 		if _, ok := cmd.(command.ReplConf); !ok {
-			conn = LogNoopConn{
+			server.Logger().Info("server process, but not respond to command", zap.Any("command", cmd))
+			conn = connection.LogNoopConn{
 				Logger:   server.Logger(),
 				ConnType: conn.ConnectionType(),
 			}
@@ -31,7 +33,7 @@ func RunCommand(server Server, conn Connection, cmd command.Command) error {
 
 type commandExecutor struct {
 	server Server
-	conn   Connection
+	conn   connection.Connection
 }
 
 func (e commandExecutor) execute(cmd command.Command) error {
@@ -56,7 +58,7 @@ func (e commandExecutor) execute(cmd command.Command) error {
 }
 
 func (e commandExecutor) executePing(_ command.Ping) error {
-	if _, err := e.conn.Write([]byte("+PONG\r\n")); err != nil {
+	if _, err := e.conn.WriteString("+PONG\r\n"); err != nil {
 		return fmt.Errorf("error writing reponse to PING command to client: %w", err)
 	}
 	return nil
@@ -68,7 +70,7 @@ func (e commandExecutor) executeEcho(echo command.Echo) error {
 		return fmt.Errorf("error encoding response for ECHO command: %w", err)
 	}
 
-	if _, err := e.conn.Write([]byte(resStr)); err != nil {
+	if _, err := e.conn.WriteString(resStr); err != nil {
 		return fmt.Errorf("error writing reponse to ECHO command to client: %w", err)
 	}
 	return nil
@@ -86,7 +88,7 @@ func (e commandExecutor) executeGet(get command.Get) error {
 		}
 	}
 
-	if _, err := e.conn.Write([]byte(responseString)); err != nil {
+	if _, err := e.conn.WriteString(responseString); err != nil {
 		return fmt.Errorf("error writing reponse to GET command to client: %w", err)
 	}
 
@@ -96,7 +98,7 @@ func (e commandExecutor) executeGet(get command.Get) error {
 func (e commandExecutor) executeSet(set command.Set) error {
 	e.server.Set(set.KeyPayload, set.ValuePayload, set.ExpiryTimeMs)
 
-	if _, err := e.conn.Write([]byte(command.OKString)); err != nil {
+	if _, err := e.conn.WriteString(command.OKString); err != nil {
 		return fmt.Errorf("error writing reponse to SET command to client: %w", err)
 	}
 
@@ -118,12 +120,12 @@ func (e commandExecutor) executeInfo(info command.Info) error {
 	slices.Sort(infoToEncode)
 
 	encoder := command.Encoder{UseBulkStrings: true}
-	res, err := encoder.EncodePrimitive(strings.Join(infoToEncode, ""))
+	res, err := encoder.Encode(strings.Join(infoToEncode, ""))
 	if err != nil {
 		return fmt.Errorf("error encoding response for INFO command: %w", err)
 	}
 
-	if _, err := e.conn.Write([]byte(res)); err != nil {
+	if _, err := e.conn.WriteString(res); err != nil {
 		return fmt.Errorf("error writing reponse to INFO command to client: %w", err)
 	}
 
@@ -138,14 +140,15 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 			e.server.Logger().Info("Master node received ACK from replica", zap.String("offset", replConf.Payload[1]))
 			return nil
 		} else if replConf.IsListeningPort() {
-			if _, err := e.conn.Write([]byte(command.OKString)); err != nil {
+			if _, err := e.conn.WriteString(command.OKString); err != nil {
 				return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
 			}
 			return nil
 		} else if replConf.IsCapa() {
-			if _, err := e.conn.Write([]byte(command.OKString)); err != nil {
+			if _, err := e.conn.WriteString(command.OKString); err != nil {
 				return fmt.Errorf("error writing reponse to REPLCONF command to client: %w", err)
 			}
+			return nil
 		}
 	case ReplicaNodeType:
 		if replConf.IsGetAck() {
@@ -154,7 +157,7 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 				return fmt.Errorf("error encoding response for REPLCONF ACK command: %w", err)
 			}
 
-			if _, err := e.conn.Write([]byte(res)); err != nil {
+			if _, err := e.conn.WriteString(res); err != nil {
 				return fmt.Errorf("error writing reponse to REPLCONF command to master: %w", err)
 			}
 
@@ -184,12 +187,12 @@ func (e commandExecutor) executePSync(_ command.PSync) error {
 		return errors.New("received a PSYNC command on a non-master server")
 	}
 
-	if _, err := e.conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODE_REPL_ID))); err != nil {
+	if _, err := e.conn.WriteString(fmt.Sprintf("+FULLRESYNC %s 0\r\n", command.HARDCODE_REPL_ID)); err != nil {
 		return fmt.Errorf("error writing reponse to PSYNC command to client: %w", err)
 	}
 
 	emptyRDB := command.GetHardedCodedEmptyRDBBytes()
-	if _, err := e.conn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB))); err != nil {
+	if _, err := e.conn.WriteString(fmt.Sprintf("$%d\r\n%s", len(emptyRDB), emptyRDB)); err != nil {
 		return fmt.Errorf("error writing RDB file response to PSYNC command to client: %w", err)
 	}
 

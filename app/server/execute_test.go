@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"net"
 	"sync"
 	"testing"
 	"time"
@@ -10,26 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
-
-func initTestCommandExecutor(initialData serverStore) (commandExecutor, net.Conn) {
-	writer, reader := net.Pipe()
-	return commandExecutor{
-		server: &MasterServer{
-			BaseServer: BaseServer{
-				storeData:   initialData,
-				storeDataMu: &sync.Mutex{},
-				logger:      log.NewNoOpLogger(),
-			},
-			registeredReplicaConns: []net.Conn{},
-		},
-		conn: ConnWithType{
-			Conn:     writer,
-			ConnType: ClientConnection,
-		},
-	}, reader
-}
 
 func getTestMasterServer(initialData serverStore) Server {
 	return &MasterServer{
@@ -38,7 +20,7 @@ func getTestMasterServer(initialData serverStore) Server {
 			storeDataMu: &sync.Mutex{},
 			logger:      log.NewNoOpLogger(),
 		},
-		registeredReplicaConns: []net.Conn{},
+		registeredReplicaConns: []connection.Connection{},
 	}
 }
 
@@ -68,28 +50,28 @@ func runCommandAndCheckOutputWithServer(t *testing.T, srv Server, cmd command.Co
 func runCommandAndCheckOutputsWithServer(t *testing.T, srv Server, cmd command.Command, expectedOutputs []string) {
 	t.Helper()
 
-	writer, reader := net.Pipe()
+	conn := connection.NewChannelConn(connection.ClientConnection)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
 	go func() {
-		err := RunCommand(
-			srv,
-			ConnWithType{
-				Conn:     writer,
-				ConnType: ClientConnection,
-			},
-			cmd,
-		)
+		err := RunCommand(srv, conn, cmd)
 		assert.Nil(t, err)
+		wg.Done()
 	}()
 
 	for idx, expectedMessage := range expectedOutputs {
 		errContextMsg := fmt.Sprintf("unexpected message received on message number %d", idx)
-		res := make([]byte, MaxMessageSize)
-		numBytes, err := reader.Read(res)
+		msg, err := conn.ReadNextCmdString()
 
 		assert.Nil(t, err, errContextMsg)
-		assert.Equal(t, expectedMessage, string(res[:numBytes]), errContextMsg)
+		assert.Equal(t, expectedMessage, msg, errContextMsg)
 	}
+
+	// Wait group enforces that run command test failure will happen during the test rather than after
+	// it finishes which gives us a cleaner error message
+	wg.Wait()
 }
 
 func TestExecutePing(t *testing.T) {

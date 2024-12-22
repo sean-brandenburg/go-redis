@@ -4,10 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"go.uber.org/zap"
-
-	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
 const (
@@ -19,53 +15,37 @@ const (
 type CommandParser struct {
 	tokens []string
 	curIdx int
-	logger log.Logger
 }
 
-func NewParser(cmd string, logger log.Logger) (CommandParser, error) {
+func NewParser(cmd string) (CommandParser, error) {
 	cmdTokens := strings.Split(
 		strings.TrimSuffix(cmd, Delimeter),
 		Delimeter,
 	)
 
 	return CommandParser{
-		logger: logger,
 		curIdx: 0,
 		tokens: cmdTokens,
 	}, nil
 }
 
-func (parser *CommandParser) Parse() ([]Command, error) {
-	parsedCmdInputs := []any{}
-	for {
-		if parser.remainingTokens() == 0 {
-			break
-		}
+func (parser *CommandParser) Parse() (Command, error) {
+	parsedElem, err := parser.parseNext()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse command: %w", err)
+	}
 
-		parsedElem, err := parser.parseNext()
+	switch typedInput := parsedElem.(type) {
+	case []any:
+		command, err := ToCommand(typedInput)
 		if err != nil {
-			parser.logger.Error("Failed to parse command, Ignoring", zap.Error(err))
-			return nil, errors.New("failed to parse command")
+			return nil, err
 		}
-		parsedCmdInputs = append(parsedCmdInputs, parsedElem)
+		return command, nil
+	default:
 	}
 
-	commands := make([]Command, 0, len(parsedCmdInputs))
-	for _, input := range parsedCmdInputs {
-		switch typedInput := input.(type) {
-		case []any:
-			command, err := ToCommand(typedInput)
-			if err != nil {
-				return nil, err
-			}
-			commands = append(commands, command)
-		default:
-			parser.logger.Error("received a non []any command input. Ignoring input", zap.Any("input", input))
-			return nil, errors.New("failed to parse command")
-		}
-	}
-
-	return commands, nil
+	return nil, fmt.Errorf("received a non []any command input. Ignoring command: %v", parser.tokens)
 }
 
 func (parser *CommandParser) parseNext() (any, error) {

@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
 func TestParseSimpleString(t *testing.T) {
@@ -144,48 +142,42 @@ func TestParseArray(t *testing.T) {
 func TestParse(t *testing.T) {
 	for _, tc := range []struct {
 		rawCmdString string
-		expectedCmds []Command
+		expectedCmd  Command
 	}{
 		{
 			// NOTE: This test also checks for the case insensitivity of command parsing
 			rawCmdString: "*1\r\n$4\r\nPiNg\r\n",
-			expectedCmds: []Command{Ping{}},
+			expectedCmd:  Ping{},
 		},
 		{
 			rawCmdString: "*2\r\n$4\r\nECHO\r\n$4\r\ntest\r\n",
-			expectedCmds: []Command{Echo{Payload: "test"}},
+			expectedCmd:  Echo{Payload: "test"},
 		},
 		{
 			rawCmdString: "*3\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n",
-			expectedCmds: []Command{Set{KeyPayload: "banana", ValuePayload: "yellow"}},
+			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow"},
 		},
 		{
 			// NOTE: This also checks that px is case insensitive
 			rawCmdString: "*5\r\n$3\r\nSET\r\n$6\r\nbanana\r\n$6\r\nyellow\r\n$2\r\npX\r\n$3\r\n100\r\n",
-			expectedCmds: []Command{Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTimeMs: int64(100)}},
+			expectedCmd:  Set{KeyPayload: "banana", ValuePayload: "yellow", ExpiryTimeMs: int64(100)},
 		},
 		{
 			rawCmdString: "*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",
-			expectedCmds: []Command{Get{Payload: "banana"}},
+			expectedCmd:  Get{Payload: "banana"},
 		},
 		{
 			rawCmdString: "*2\r\n$4\r\nINFO\r\n$11\r\nreplication\r\n",
-			expectedCmds: []Command{Info{Payload: "replication"}},
-		},
-
-		// Multiple commands in a single request
-		{
-			rawCmdString: "*2\r\n$4\r\nECHO\r\n$4\r\ntest\r\n*2\r\n$3\r\nGET\r\n$6\r\nbanana\r\n",
-			expectedCmds: []Command{Echo{Payload: "test"}, Get{Payload: "banana"}},
+			expectedCmd:  Info{Payload: "replication"},
 		},
 	} {
-		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmds), func(t *testing.T) {
-			parser, err := NewParser(tc.rawCmdString, log.NewNoOpLogger())
+		t.Run(fmt.Sprintf("input %q should parse to populated %T command", tc.rawCmdString, tc.expectedCmd), func(t *testing.T) {
+			parser, err := NewParser(tc.rawCmdString)
 			assert.NoError(t, err)
 
 			cmd, err := parser.Parse()
 			assert.NoError(t, err)
-			assert.Equal(t, tc.expectedCmds, cmd)
+			assert.Equal(t, tc.expectedCmd, cmd)
 		})
 	}
 }

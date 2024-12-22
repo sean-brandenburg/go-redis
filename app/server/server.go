@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
@@ -23,7 +24,7 @@ type Server interface {
 	Run(ctx context.Context) error
 
 	// ExecuteCommand runs a command on this server
-	ExecuteCommand(conn Connection, command command.Command) error
+	ExecuteCommand(conn connection.Connection, command command.Command) error
 
 	// Set sets a key in the server's store
 	Set(key string, value any, expiryTimeMs int64)
@@ -45,7 +46,7 @@ type Server interface {
 	CanHandleConnections() bool
 
 	// ShouldRespondToCommand is true if this server should send a response after processing a message from a Connection
-	ShouldRespondToCommand(Connection, command.Command) bool
+	ShouldRespondToCommand(connection.Connection, command.Command) bool
 }
 
 type BaseServer struct {
@@ -96,7 +97,7 @@ func (s *BaseServer) NodeType() NodeType {
 
 // NOTE: The base server implementation of ExecuteCommand should only be used in tests
 // Otherwise we should use the MasterServer and ReplicaServer implementations
-func (s *BaseServer) ExecuteCommand(conn Connection, command command.Command) error {
+func (s *BaseServer) ExecuteCommand(conn connection.Connection, command command.Command) error {
 	return RunCommand(s, conn, command)
 }
 
@@ -108,6 +109,6 @@ func (s *BaseServer) CanHandleConnections() bool {
 	return true
 }
 
-func (s *BaseServer) ShouldRespondToCommand(Connection, command.Command) bool {
+func (s *BaseServer) ShouldRespondToCommand(connection.Connection, command.Command) bool {
 	return true
 }

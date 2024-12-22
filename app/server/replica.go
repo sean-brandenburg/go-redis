@@ -1,16 +1,15 @@
 package server
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 
 	"go.uber.org/zap"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
@@ -21,7 +20,7 @@ type ReplicaServer struct {
 	// to the master of this replica's replica set
 	masterAddress string
 
-	masterConnection net.Conn
+	masterConnection connection.Connection
 
 	steadyState bool
 
@@ -51,7 +50,7 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to dial master at address %q: %s", s.masterAddress, err)
 	}
-	s.masterConnection = conn
+	s.masterConnection = connection.NewConnWithType(conn, connection.MasterConnection, s.logger)
 
 	// 0. Start the connection handler for the replica before we sync with the master
 	// so that we can accept connections. We will not read requests from these connections until we're in steady state
@@ -61,7 +60,7 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 		ctx,
 		s.logger,
 		s.eventQueue,
-		func(conn Connection, cmd command.Command) error {
+		func(conn connection.Connection, cmd command.Command) error {
 			return s.ExecuteCommand(conn, cmd)
 		},
 	)
@@ -94,57 +93,27 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 
 	// 4a. The replica sends a PSYNC to master to get a replicationID
-	psync := command.PSync{ReplicationID: "?", MasterOffset: "-1"}
-	encodedCmd, err := psync.EncodedCommand()
+	res, err = s.SendCommandToMaster(ctx, &command.PSync{ReplicationID: "?", MasterOffset: "-1"})
 	if err != nil {
-		return fmt.Errorf("failed to encode command %v: %s", psync, err)
+		return fmt.Errorf("failed to send PSYNC message to master: %w", err)
 	}
-	_, err = s.masterConnection.Write([]byte(encodedCmd))
-	if err != nil {
-		return fmt.Errorf("failed to write command %q to master at address %q: %s", encodedCmd, s.masterAddress, err)
-	}
+	s.Logger().Info("received response to PSYNC command", zap.String("response", res))
 
-	// 4b. Read off the FULLRESYNC
-	r := bufio.NewReader(s.masterConnection)
-	fullResyncMsg, err := r.ReadString('\n')
+	// 4b. Read off the RDB file
+	res, err = s.masterConnection.ReadRDBFile()
 	if err != nil {
-		return fmt.Errorf("failed to read PSYNC response FULLRESYNC for command from master at address %q: %s", s.masterAddress, err)
+		return fmt.Errorf("failed to read off RDB file after sending PSYNC message: %w", err)
 	}
-	s.Logger().Info("received response to PSYNC command", zap.String("response", fullResyncMsg))
-
-	// 4c. Read off the size of the RDB file. Should get a response like $88\r\n
-	rdbFileSize, err := r.ReadString('\n')
-	s.Logger().Info("received RDB file size string", zap.String("data", rdbFileSize))
-
-	if err != nil {
-		return fmt.Errorf("failed to read PSYNC response FULLRESYNC for command from master at address %q: %s", s.masterAddress, err)
-	}
-
-	// 4d. String should now look like $88
-	trimmedRDBFileSizeStr := strings.TrimSuffix(rdbFileSize, "\r\n")
-	bytesToRead, err := command.ParseIntWithPrefix(trimmedRDBFileSizeStr, "$")
-	if err != nil {
-		return fmt.Errorf("RDB file response to PSYNC did not contain an int size in its header: %q", trimmedRDBFileSizeStr)
-	}
-
-	// 4e. Read the expected number of bytes
-	buf := make([]byte, bytesToRead)
-	rdbData, err := r.Read(buf)
-	if err != nil {
-		return fmt.Errorf("error reading RDB data: %w", err)
-	}
-	s.Logger().Info("received RDB data", zap.String("data", string(buf[:rdbData])))
+	s.Logger().Info("received RDB data", zap.String("data", res))
 
 	// 5. Start up client handler for the master conn and set the replica to steady state
-	// TODO: Figure out why this sometimes hangs and isn't able to respond to the master before timing out
-	// Seems like there's nothing on the connection when we go to read
-	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
+	go s.clientHandler(ctx, s.masterConnection)
 	s.SetIsSteadyState(true)
 
 	return nil
 }
 
-func (s *ReplicaServer) ExecuteCommand(conn Connection, cmd command.Command) error {
+func (s *ReplicaServer) ExecuteCommand(conn connection.Connection, cmd command.Command) error {
 	s.Logger().Info(fmt.Sprintf("replica executing command: %v", cmd))
 
 	err := RunCommand(s, conn, cmd)
@@ -161,17 +130,16 @@ func (s *ReplicaServer) SendCommandToMaster(ctx context.Context, cmd command.Com
 		return "", fmt.Errorf("failed to encode command %v: %s", cmd, err)
 	}
 
-	_, err = s.masterConnection.Write([]byte(encodedCmd))
+	_, err = s.masterConnection.WriteString(encodedCmd)
 	if err != nil {
 		return "", fmt.Errorf("failed to write command %q to master at address %q: %s", encodedCmd, s.masterAddress, err)
 	}
 
-	rawRes := make([]byte, MaxMessageSize)
-	bytesRead, err := s.masterConnection.Read(rawRes)
+	// TODO: Add generic reaad command from conn function that can be used here and elsewhere
+	responseCmdStr, err := s.masterConnection.ReadNextCmdString()
 	if err != nil {
 		return "", fmt.Errorf("failed to read response for command from master at address %q: %s", s.masterAddress, err)
 	}
-	strRes := string(rawRes[:bytesRead])
 
 	s.logger.Info(
 		"successfully sent command to master node",
@@ -179,7 +147,7 @@ func (s *ReplicaServer) SendCommandToMaster(ctx context.Context, cmd command.Com
 		zap.String("command", encodedCmd),
 	)
 
-	return strRes, nil
+	return responseCmdStr, nil
 }
 
 func (s *ReplicaServer) CanHandleConnections() bool {
@@ -190,9 +158,9 @@ func (s *ReplicaServer) SetIsSteadyState(steadyState bool) {
 	s.steadyState = steadyState
 }
 
-func (s *ReplicaServer) ShouldRespondToCommand(conn Connection, cmd command.Command) bool {
+func (s *ReplicaServer) ShouldRespondToCommand(conn connection.Connection, cmd command.Command) bool {
 	return !s.shouldIgnoreMaster ||
-		conn.ConnectionType() != MasterConnection ||
+		conn.ConnectionType() != connection.MasterConnection ||
 		cmd.CommandType() == command.ReplConfCmd
 
 }

@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
@@ -13,7 +13,7 @@ type MasterServer struct {
 	BaseServer
 
 	// A list of replica connections that are currently registered with this master
-	registeredReplicaConns []net.Conn
+	registeredReplicaConns []connection.Connection
 }
 
 func (s *MasterServer) NodeType() NodeType {
@@ -30,8 +30,7 @@ func NewMasterServer(logger log.Logger, opts ServerOptions) (MasterServer, error
 	}, nil
 }
 
-func (s *MasterServer) ExecuteCommand(conn Connection, cmd command.Command) error {
-	s.Logger().Info(fmt.Sprintf("master executing command: %v", cmd))
+func (s *MasterServer) ExecuteCommand(conn connection.Connection, cmd command.Command) error {
 	err := RunCommand(s, conn, cmd)
 	if err != nil {
 		return fmt.Errorf("error executing command: %w", err)
@@ -55,7 +54,7 @@ func (s *MasterServer) handleCommandPropagation(cmd command.Command) error {
 
 		// Send the encoded command to all registered replica connections
 		for _, replicaConn := range s.registeredReplicaConns {
-			_, err := replicaConn.Write([]byte(res))
+			_, err := replicaConn.WriteString(res)
 			if err != nil {
 				return fmt.Errorf("error sending command to replica: %w", err)
 			}
@@ -72,7 +71,7 @@ func (s *MasterServer) Run(ctx context.Context) error {
 		ctx,
 		s.logger,
 		s.eventQueue,
-		func(clientConn Connection, cmd command.Command) error {
+		func(clientConn connection.Connection, cmd command.Command) error {
 			return s.ExecuteCommand(clientConn, cmd)
 		},
 	)
@@ -86,6 +85,6 @@ func (s *MasterServer) CanHandleConnections() bool {
 	return true
 }
 
-func (s *MasterServer) ShouldRespondToCommand(Connection, command.Command) bool {
+func (s *MasterServer) ShouldRespondToCommand(connection.Connection, command.Command) bool {
 	return true
 }

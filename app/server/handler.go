@@ -8,6 +8,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/codecrafters-io/redis-starter-go/app/command"
+	"github.com/codecrafters-io/redis-starter-go/app/connection"
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
@@ -26,14 +27,14 @@ const (
 	MaxMessageSize = 1024
 )
 
-type ExecuteCommand func(conn Connection, cmd command.Command) error
+type ExecuteCommand func(conn connection.Connection, cmd command.Command) error
 
 type Event struct {
 	// The event string to be handled
 	Command string
 
 	// The client connection that this event came from
-	Conn Connection
+	Conn connection.Connection
 }
 
 func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, execute ExecuteCommand) {
@@ -50,24 +51,22 @@ func EventLoop(ctx context.Context, logger log.Logger, eventQueue chan Event, ex
 				zap.Stringer("remoteAddress", event.Conn.RemoteAddr()),
 			)
 
-			parser, err := command.NewParser(event.Command, logger)
+			parser, err := command.NewParser(event.Command)
 			if err != nil {
 				logger.Error("error building parser from client command", zap.Error(err))
 				continue
 			}
-			cmds, err := parser.Parse()
+			cmd, err := parser.Parse()
 			if err != nil {
 				logger.Error("error parsing client command", zap.Error(err))
 				continue
 			}
 
-			for _, cmd := range cmds {
-				logger.Info("executing commands", zap.Stringer("command", cmd))
-				err = execute(event.Conn, cmd)
-				if err != nil {
-					logger.Error("error executing client command", zap.Error(err))
-					continue
-				}
+			logger.Info("executing command", zap.Stringer("command", cmd))
+
+			err = execute(event.Conn, cmd)
+			if err != nil {
+				logger.Error("error executing client command, skipping execution", zap.Error(err))
 			}
 		}
 	}
@@ -130,7 +129,8 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 		}
 
 		s.logger.Info("accepted connection from client", zap.Stringer("remoteAddress", clientConn.RemoteAddr()))
-		go s.clientHandler(ctx, ConnWithType{Conn: clientConn, ConnType: ClientConnection})
+
+		go s.clientHandler(ctx, connection.NewConnWithType(clientConn, connection.ClientConnection, s.logger))
 	}
 }
 
@@ -153,7 +153,7 @@ func (s BaseServer) waitUntilCanHandleConnections(ctx context.Context) error {
 
 // clienHandler is responsible for reading messages off of a connection and turning them into events
 // which are then placed on the event queue
-func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
+func (s BaseServer) clientHandler(ctx context.Context, conn connection.Connection) {
 	defer conn.Close()
 
 	err := s.waitUntilCanHandleConnections(ctx)
@@ -170,14 +170,11 @@ func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
 			s.logger.Error("client handler exiting", zap.Error(ctx.Err()))
 			return
 		default:
-			data := make([]byte, MaxMessageSize)
-			bytesRead, err := conn.Read(data)
+			command, err := conn.ReadNextCmdString()
 			if err != nil {
-				s.logger.Error("error reading from client connection", zap.Error(err))
+				s.logger.Error("error reading next command from client connection", zap.Error(err))
 				return
 			}
-
-			command := string(data[:bytesRead])
 			s.logger.Info("received command", zap.String("command", command))
 
 			s.eventQueue <- Event{
