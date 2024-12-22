@@ -13,7 +13,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/log"
 )
 
-type ConnWithType struct {
+type NetworkConn struct {
 	readWriter *bufio.ReadWriter
 
 	conn net.Conn
@@ -23,8 +23,8 @@ type ConnWithType struct {
 	logger log.Logger
 }
 
-func NewConnWithType(conn net.Conn, connType ConnectionType, logger log.Logger) Connection {
-	return ConnWithType{
+func NewNetworkConn(conn net.Conn, connType ConnectionType, logger log.Logger) Connection {
+	return NetworkConn{
 		readWriter: bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
 		conn:       conn,
 		connType:   connType,
@@ -32,7 +32,7 @@ func NewConnWithType(conn net.Conn, connType ConnectionType, logger log.Logger) 
 	}
 }
 
-func (c ConnWithType) WriteString(data string) (int, error) {
+func (c NetworkConn) WriteString(data string) (int, error) {
 	numBytes, err := c.readWriter.Write([]byte(data))
 	if err != nil {
 		return 0, nil
@@ -54,7 +54,7 @@ func getBulkStringLength(rawStr string) (int64, error) {
 
 }
 
-func (c ConnWithType) ReadNextCmdString() (string, error) {
+func (c NetworkConn) ReadNextCmdString() (string, error) {
 	firstReadRes, err := c.readWriter.ReadString('\n')
 	if err != nil {
 		return "", err
@@ -106,7 +106,7 @@ func (c ConnWithType) ReadNextCmdString() (string, error) {
 	return firstReadRes, nil
 }
 
-func (c ConnWithType) ReadRDBFile() (string, error) {
+func (c NetworkConn) ReadRDBFile() (string, error) {
 	firstReadRes, err := c.readWriter.ReadString('\n')
 	if err != nil {
 		return "", err
@@ -139,18 +139,18 @@ func (c ConnWithType) ReadRDBFile() (string, error) {
 	return "", fmt.Errorf("tried to read off RDB file, but got %q", firstReadRes)
 }
 
-func (c ConnWithType) ConnectionType() ConnectionType {
+func (c NetworkConn) ConnectionType() ConnectionType {
 	return c.connType
 }
 
-func (c ConnWithType) RemoteAddr() net.Addr {
+func (c NetworkConn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-func (c ConnWithType) LocalAddr() net.Addr {
+func (c NetworkConn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
-func (c ConnWithType) Close() error {
+func (c NetworkConn) Close() error {
 	return c.conn.Close()
 }

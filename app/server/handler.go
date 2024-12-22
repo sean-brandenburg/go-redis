@@ -130,7 +130,7 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 
 		s.logger.Info("accepted connection from client", zap.Stringer("remoteAddress", clientConn.RemoteAddr()))
 
-		go s.clientHandler(ctx, connection.NewConnWithType(clientConn, connection.ClientConnection, s.logger))
+		go s.clientHandler(ctx, connection.NewNetworkConn(clientConn, connection.ClientConnection, s.logger))
 	}
 }
 

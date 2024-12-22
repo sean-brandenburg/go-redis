@@ -50,7 +50,7 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to dial master at address %q: %s", s.masterAddress, err)
 	}
-	s.masterConnection = connection.NewConnWithType(conn, connection.MasterConnection, s.logger)
+	s.masterConnection = connection.NewNetworkConn(conn, connection.MasterConnection, s.logger)
 
 	// 0. Start the connection handler for the replica before we sync with the master
 	// so that we can accept connections. We will not read requests from these connections until we're in steady state
