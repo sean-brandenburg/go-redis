@@ -19,6 +19,10 @@ const (
 	BaseNodeType    NodeType = "base"
 )
 
+const (
+	DEFAULT_PORT = 6379
+)
+
 type Server interface {
 	// Run the server
 	Run(ctx context.Context) error
@@ -66,7 +70,7 @@ type ServerOptions struct {
 }
 
 func NewBaseServer(logger log.Logger, opts ServerOptions) (BaseServer, error) {
-	port := 6379
+	port := DEFAULT_PORT
 
 	if opts.Port != nil {
 		port = *opts.Port

@@ -25,6 +25,10 @@ type ReplicaServer struct {
 	steadyState bool
 
 	shouldIgnoreMaster bool
+
+	// The total number of bytes of commands that this replica has processed. Because this is only updated
+	// in the event loop, there's no need to lock this/use a sync value
+	bytesProcessed int64
 }
 
 func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOptions) (ReplicaServer, error) {
@@ -34,10 +38,8 @@ func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOption
 	}
 
 	return ReplicaServer{
-		BaseServer:         baseServer,
-		masterAddress:      masterAddress,
-		steadyState:        false,
-		shouldIgnoreMaster: false,
+		BaseServer:    baseServer,
+		masterAddress: masterAddress,
 	}, nil
 }
 
@@ -120,6 +122,13 @@ func (s *ReplicaServer) ExecuteCommand(conn connection.Connection, cmd command.C
 	if err != nil {
 		return fmt.Errorf("error executing command: %w", err)
 	}
+
+	// TODO: I'm doing a lot of decoding/recoding for this command. Should cache this in the command itself
+	encodedCmd, err := cmd.EncodedCommand()
+	if err != nil {
+		return fmt.Errorf("failed to generate encoded command to update bytes processed in replica: %w", err)
+	}
+	s.bytesProcessed += int64(len(encodedCmd))
 
 	return nil
 }

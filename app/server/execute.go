@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"go.uber.org/zap"
@@ -134,8 +135,8 @@ func (e commandExecutor) executeInfo(info command.Info) error {
 
 func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 	nodeType := e.server.NodeType()
-	switch nodeType {
-	case MasterNodeType:
+	switch typedServer := e.server.(type) {
+	case *MasterServer:
 		if replConf.IsAck() {
 			e.server.Logger().Info("Master node received ACK from replica", zap.String("offset", replConf.Payload[1]))
 			return nil
@@ -150,9 +151,9 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 			}
 			return nil
 		}
-	case ReplicaNodeType:
+	case *ReplicaServer:
 		if replConf.IsGetAck() {
-			res, err := command.Encoder{}.EncodeArray([]any{"REPLCONF", "ACK", "0"})
+			res, err := command.Encoder{}.EncodeArray([]any{"REPLCONF", "ACK", strconv.FormatInt(typedServer.bytesProcessed, 10)})
 			if err != nil {
 				return fmt.Errorf("error encoding response for REPLCONF ACK command: %w", err)
 			}
