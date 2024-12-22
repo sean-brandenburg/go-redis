@@ -14,7 +14,11 @@ func (info Info) String() string {
 
 func (info Info) EncodedCommand() (string, error) {
 	e := Encoder{UseBulkStrings: true}
-	return e.Encode([]any{string(infoCmd), info.Payload})
+	return e.EncodeArray([]any{string(InfoCmd), info.Payload})
+}
+
+func (Info) CommandType() CommandType {
+	return InfoCmd
 }
 
 func toInfo(data []any) (Info, error) {

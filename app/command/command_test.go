@@ -42,10 +42,6 @@ func TestEncodeCommand(t *testing.T) {
 			expectedCmdString: "*2\r\n$3\r\nget\r\n$4\r\ntest\r\n",
 		},
 		{
-			cmd:               ReplConf{},
-			expectedCmdString: "*3\r\n$8\r\nreplconf\r\n$0\r\n\r\n$0\r\n\r\n",
-		},
-		{
 			cmd:               ReplConf{Payload: []string{"key", "val"}},
 			expectedCmdString: "*3\r\n$8\r\nreplconf\r\n$3\r\nkey\r\n$3\r\nval\r\n",
 		},

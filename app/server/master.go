@@ -82,6 +82,10 @@ func (s *MasterServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *MasterServer) IsSteadyState() bool {
+func (s *MasterServer) CanHandleConnections() bool {
+	return true
+}
+
+func (s *MasterServer) ShouldRespondToCommand(Connection, command.Command) bool {
 	return true
 }

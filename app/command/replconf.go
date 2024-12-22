@@ -16,11 +16,15 @@ func (conf ReplConf) String() string {
 
 func (conf ReplConf) EncodedCommand() (string, error) {
 	e := Encoder{UseBulkStrings: true}
-	toEncode := []any{string(replConfCmd)}
+	toEncode := []any{string(ReplConfCmd)}
 	for _, payload := range conf.Payload {
 		toEncode = append(toEncode, payload)
 	}
-	return e.Encode(toEncode)
+	return e.EncodeArray(toEncode)
+}
+
+func (ReplConf) CommandType() CommandType {
+	return ReplConfCmd
 }
 
 func (conf ReplConf) IsGetAck() bool {

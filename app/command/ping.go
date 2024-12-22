@@ -12,7 +12,11 @@ func (Ping) String() string {
 
 func (Ping) EncodedCommand() (string, error) {
 	e := Encoder{UseBulkStrings: true}
-	return e.Encode([]any{string(pingCmd)})
+	return e.EncodeArray([]any{string(PingCmd)})
+}
+
+func (Ping) CommandType() CommandType {
+	return PingCmd
 }
 
 func toPing(data []any) (Ping, error) {

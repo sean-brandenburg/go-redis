@@ -24,6 +24,8 @@ type ReplicaServer struct {
 	masterConnection net.Conn
 
 	steadyState bool
+
+	shouldIgnoreMaster bool
 }
 
 func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOptions) (ReplicaServer, error) {
@@ -33,9 +35,10 @@ func NewReplicaServer(logger log.Logger, masterAddress string, opts ServerOption
 	}
 
 	return ReplicaServer{
-		BaseServer:    baseServer,
-		masterAddress: masterAddress,
-		steadyState:   false,
+		BaseServer:         baseServer,
+		masterAddress:      masterAddress,
+		steadyState:        false,
+		shouldIgnoreMaster: false,
 	}, nil
 }
 
@@ -50,11 +53,10 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 	s.masterConnection = conn
 
-	// 0. Start the event/connection handling for the replica before we sync with the master
-	// since the tests expect that we are immediately ready to start handling connections after we respond
-	//
-	// In the real world though, I would want this to be after we've synchronized with the mater so that a client won't
-	// be able to connect and read before we have a consistent state
+	// 0. Start the connection handler for the replica before we sync with the master
+	// so that we can accept connections. We will not read requests from these connections until we're in steady state
+	go s.ExpiryLoop(ctx)
+	go s.ConnectionHandler(ctx)
 	go EventLoop(
 		ctx,
 		s.logger,
@@ -63,9 +65,6 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 			return s.ExecuteCommand(conn, cmd)
 		},
 	)
-	go s.ConnectionHandler(ctx)
-
-	go s.ExpiryLoop(ctx)
 
 	// 1. The replica sends a ping to it's master
 	res, err := s.SendCommandToMaster(ctx, &command.Ping{})
@@ -114,15 +113,15 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	s.Logger().Info("received response to PSYNC command", zap.String("response", fullResyncMsg))
 
 	// 4c. Read off the size of the RDB file. Should get a response like $88\r\n
-	RDBFileSize, err := r.ReadString('\n')
-	s.Logger().Info("received RDB file size string", zap.String("data", RDBFileSize))
+	rdbFileSize, err := r.ReadString('\n')
+	s.Logger().Info("received RDB file size string", zap.String("data", rdbFileSize))
 
 	if err != nil {
 		return fmt.Errorf("failed to read PSYNC response FULLRESYNC for command from master at address %q: %s", s.masterAddress, err)
 	}
 
 	// 4d. String should now look like $88
-	trimmedRDBFileSizeStr := strings.TrimSuffix(RDBFileSize, "\r\n")
+	trimmedRDBFileSizeStr := strings.TrimSuffix(rdbFileSize, "\r\n")
 	bytesToRead, err := command.ParseIntWithPrefix(trimmedRDBFileSizeStr, "$")
 	if err != nil {
 		return fmt.Errorf("RDB file response to PSYNC did not contain an int size in its header: %q", trimmedRDBFileSizeStr)
@@ -136,8 +135,11 @@ func (s *ReplicaServer) Run(ctx context.Context) error {
 	}
 	s.Logger().Info("received RDB data", zap.String("data", string(buf[:rdbData])))
 
-	// 5. Start up client handler for the master conn (TODO: The master expects this to already be up at this point sometimes)
+	// 5. Start up client handler for the master conn and set the replica to steady state
+	// TODO: Figure out why this sometimes hangs and isn't able to respond to the master before timing out
+	// Seems like there's nothing on the connection when we go to read
 	go s.clientHandler(ctx, ConnWithType{Conn: s.masterConnection, ConnType: MasterConnection})
+	s.SetIsSteadyState(true)
 
 	return nil
 }
@@ -180,10 +182,21 @@ func (s *ReplicaServer) SendCommandToMaster(ctx context.Context, cmd command.Com
 	return strRes, nil
 }
 
-func (s *ReplicaServer) IsSteadyState() bool {
+func (s *ReplicaServer) CanHandleConnections() bool {
 	return s.steadyState
 }
 
 func (s *ReplicaServer) SetIsSteadyState(steadyState bool) {
 	s.steadyState = steadyState
+}
+
+func (s *ReplicaServer) ShouldRespondToCommand(conn Connection, cmd command.Command) bool {
+	return !s.shouldIgnoreMaster ||
+		conn.ConnectionType() != MasterConnection ||
+		cmd.CommandType() == command.ReplConfCmd
+
+}
+
+func (s *ReplicaServer) SetShouldIgnoreMaster(shouldIgnoreMaster bool) {
+	s.shouldIgnoreMaster = shouldIgnoreMaster
 }

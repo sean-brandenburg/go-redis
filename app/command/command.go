@@ -11,18 +11,20 @@ type Command interface {
 
 	// EncodedCommand turns a command into it's bulk string representation
 	EncodedCommand() (string, error)
+
+	CommandType() CommandType
 }
 
 type CommandType string
 
 const (
-	pingCmd     CommandType = "ping"
-	echoCmd     CommandType = "echo"
-	infoCmd     CommandType = "info"
-	setCmd      CommandType = "set"
-	getCmd      CommandType = "get"
-	replConfCmd CommandType = "replconf"
-	pSyncCmd    CommandType = "psync"
+	PingCmd     CommandType = "ping"
+	EchoCmd     CommandType = "echo"
+	InfoCmd     CommandType = "info"
+	SetCmd      CommandType = "set"
+	GetCmd      CommandType = "get"
+	ReplConfCmd CommandType = "replconf"
+	PSyncCmd    CommandType = "psync"
 )
 
 func ToCommand(data []any) (Command, error) {
@@ -40,19 +42,19 @@ func ToCommand(data []any) (Command, error) {
 	cmdData := data[1:]
 
 	switch CommandType(cmdType) {
-	case pingCmd:
+	case PingCmd:
 		return toPing(cmdData)
-	case echoCmd:
+	case EchoCmd:
 		return toEcho(cmdData)
-	case infoCmd:
+	case InfoCmd:
 		return toInfo(cmdData)
-	case getCmd:
+	case GetCmd:
 		return toGet(cmdData)
-	case setCmd:
+	case SetCmd:
 		return toSet(cmdData)
-	case replConfCmd:
+	case ReplConfCmd:
 		return toReplConf(cmdData)
-	case pSyncCmd:
+	case PSyncCmd:
 		return toPSync(cmdData)
 	default:
 	}

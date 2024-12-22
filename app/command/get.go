@@ -14,7 +14,11 @@ func (get Get) String() string {
 
 func (get Get) EncodedCommand() (string, error) {
 	e := Encoder{UseBulkStrings: true}
-	return e.Encode([]any{string(getCmd), get.Payload})
+	return e.EncodeArray([]any{string(GetCmd), get.Payload})
+}
+
+func (Get) CommandType() CommandType {
+	return GetCmd
 }
 
 func toGet(data []any) (Get, error) {

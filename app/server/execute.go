@@ -12,8 +12,7 @@ import (
 )
 
 func RunCommand(server Server, conn Connection, cmd command.Command) error {
-	cmdIsFromMaster := conn.ConnectionType() == MasterConnection && server.NodeType() == ReplicaNodeType
-	if cmdIsFromMaster && server.IsSteadyState() {
+	if !server.ShouldRespondToCommand(conn, cmd) {
 		// Once in steady state, replica nodes should only reply to replconf messages so set the conn to Noop
 		if _, ok := cmd.(command.ReplConf); !ok {
 			conn = LogNoopConn{
@@ -47,8 +46,6 @@ func (e commandExecutor) execute(cmd command.Command) error {
 		return e.executeGet(typedCommand)
 	case command.Set:
 		return e.executeSet(typedCommand)
-
-	// Replication Handling
 	case command.ReplConf:
 		return e.executeReplConf(typedCommand)
 	case command.PSync:
@@ -66,7 +63,7 @@ func (e commandExecutor) executePing(_ command.Ping) error {
 }
 
 func (e commandExecutor) executeEcho(echo command.Echo) error {
-	resStr, err := command.Encoder{}.Encode(echo.Payload)
+	resStr, err := command.Encoder{}.EncodePrimitive(echo.Payload)
 	if err != nil {
 		return fmt.Errorf("error encoding response for ECHO command: %w", err)
 	}
@@ -83,7 +80,7 @@ func (e commandExecutor) executeGet(get command.Get) error {
 	data, ok := e.server.Get(get.Payload)
 	if ok {
 		var err error
-		responseString, err = command.Encoder{}.Encode(data)
+		responseString, err = command.Encoder{}.EncodePrimitive(data)
 		if err != nil {
 			return fmt.Errorf("error encoding response for GET command: %w", err)
 		}
@@ -121,7 +118,7 @@ func (e commandExecutor) executeInfo(info command.Info) error {
 	slices.Sort(infoToEncode)
 
 	encoder := command.Encoder{UseBulkStrings: true}
-	res, err := encoder.Encode(strings.Join(infoToEncode, ""))
+	res, err := encoder.EncodePrimitive(strings.Join(infoToEncode, ""))
 	if err != nil {
 		return fmt.Errorf("error encoding response for INFO command: %w", err)
 	}
@@ -152,7 +149,7 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 		}
 	case ReplicaNodeType:
 		if replConf.IsGetAck() {
-			res, err := command.Encoder{}.Encode([]any{"REPLCONF", "ACK", "0"})
+			res, err := command.Encoder{}.EncodeArray([]any{"REPLCONF", "ACK", "0"})
 			if err != nil {
 				return fmt.Errorf("error encoding response for REPLCONF ACK command: %w", err)
 			}
@@ -166,7 +163,8 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 				return errors.New("REPLCONF GETACK processed for node with type ReplicaNode, but failed to cast to ReplicaServer")
 			}
 
-			replica.SetIsSteadyState(true)
+			// After getting a replconf, we should no longer respond to the master's messages
+			replica.SetShouldIgnoreMaster(true)
 
 			return nil
 		}

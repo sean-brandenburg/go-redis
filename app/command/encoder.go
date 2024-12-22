@@ -21,9 +21,9 @@ func (e Encoder) Encode(data any) (string, error) {
 	// case []byte: // TODO: Not sure if this needs to be handled serperately (as a bulk string)
 	// 	return encodeBulkString(typedData)
 	case []any:
-		return e.encodeArray(typedData)
+		return e.EncodeArray(typedData)
 	default:
-		return e.encodePrimitive(typedData)
+		return e.EncodePrimitive(typedData)
 	}
 }
 
@@ -36,7 +36,7 @@ func (e Encoder) MustEncode(data any) string {
 	return res
 }
 
-func (e Encoder) encodeArray(arrayData []any) (string, error) {
+func (e Encoder) EncodeArray(arrayData []any) (string, error) {
 	builder := strings.Builder{}
 
 	builder.WriteString(fmt.Sprintf("*%d%s", len(arrayData), Delimeter))
@@ -51,7 +51,7 @@ func (e Encoder) encodeArray(arrayData []any) (string, error) {
 	return builder.String(), nil
 }
 
-func (e Encoder) encodePrimitive(data any) (string, error) {
+func (e Encoder) EncodePrimitive(data any) (string, error) {
 	var result string
 	var err error
 	switch typedData := data.(type) {

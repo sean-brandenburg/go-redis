@@ -20,13 +20,17 @@ func (set Set) String() string {
 
 func (set Set) EncodedCommand() (string, error) {
 	// TODO: This only handles string value payloads properly
-	cmdList := []any{string(setCmd), set.KeyPayload, set.ValuePayload}
+	cmdList := []any{string(SetCmd), set.KeyPayload, set.ValuePayload}
 	if set.ExpiryTimeMs != 0 {
 		cmdList = append(cmdList, "px", fmt.Sprintf("%d", set.ExpiryTimeMs))
 	}
 
 	e := Encoder{UseBulkStrings: true}
-	return e.Encode(cmdList)
+	return e.EncodeArray(cmdList)
+}
+
+func (Set) CommandType() CommandType {
+	return SetCmd
 }
 
 // TODO: Should clean up this function

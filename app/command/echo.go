@@ -14,7 +14,11 @@ func (echo Echo) String() string {
 
 func (echo Echo) EncodedCommand() (string, error) {
 	e := Encoder{UseBulkStrings: true}
-	return e.Encode([]any{string(echoCmd), echo.Payload})
+	return e.EncodeArray([]any{string(EchoCmd), echo.Payload})
+}
+
+func (Echo) CommandType() CommandType {
+	return EchoCmd
 }
 
 func toEcho(data []any) (Echo, error) {

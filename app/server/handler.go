@@ -129,7 +129,25 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 			continue
 		}
 
+		s.logger.Info("accepted connection from client", zap.Stringer("remoteAddress", clientConn.RemoteAddr()))
 		go s.clientHandler(ctx, ConnWithType{Conn: clientConn, ConnType: ClientConnection})
+	}
+}
+
+func (s BaseServer) waitUntilCanHandleConnections(ctx context.Context) error {
+	if s.CanHandleConnections() {
+		return nil
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Millisecond * 200):
+			if s.CanHandleConnections() {
+				return nil
+			}
+		}
 	}
 }
 
@@ -137,6 +155,13 @@ func (s BaseServer) ConnectionHandler(ctx context.Context) {
 // which are then placed on the event queue
 func (s BaseServer) clientHandler(ctx context.Context, conn Connection) {
 	defer conn.Close()
+
+	err := s.waitUntilCanHandleConnections(ctx)
+	if err != nil {
+		s.logger.Error("failed to wait until client can be handled", zap.Error(err))
+		return
+	}
+
 	s.logger.Info("starting client handler", zap.Stringer("remoteAddress", conn.RemoteAddr()))
 
 	for {

@@ -41,8 +41,11 @@ type Server interface {
 	// NodeType returns the type of this server
 	NodeType() NodeType
 
-	// IsSteadyState is true if a server is up and ready to receive requests
-	IsSteadyState() bool
+	// CanHandleConnections is true if a server is up and ready to handle events from connections
+	CanHandleConnections() bool
+
+	// ShouldRespondToCommand is true if this server should send a response after processing a message from a Connection
+	ShouldRespondToCommand(Connection, command.Command) bool
 }
 
 type BaseServer struct {
@@ -101,6 +104,10 @@ func (s *BaseServer) Run(ctx context.Context) error {
 	return fmt.Errorf("the base server's run should not be used and exists only to fulfill the Server interface to simplify testing")
 }
 
-func (s *BaseServer) IsSteadyState() bool {
+func (s *BaseServer) CanHandleConnections() bool {
+	return true
+}
+
+func (s *BaseServer) ShouldRespondToCommand(Connection, command.Command) bool {
 	return true
 }
