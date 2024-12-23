@@ -34,6 +34,10 @@ func TestEncodeCommand(t *testing.T) {
 			expectedCmdString: "*2\r\n$4\r\necho\r\n$4\r\ntest\r\n",
 		},
 		{
+			cmd:               Wait{NumReplicas: 1, WaitForMs: 2},
+			expectedCmdString: "*3\r\n$4\r\nwait\r\n$1\r\n1\r\n$1\r\n2\r\n",
+		},
+		{
 			cmd:               Get{},
 			expectedCmdString: "*2\r\n$3\r\nget\r\n$0\r\n\r\n",
 		},

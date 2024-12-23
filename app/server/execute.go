@@ -45,6 +45,8 @@ func (e commandExecutor) execute(cmd command.Command) error {
 		return e.executeEcho(typedCommand)
 	case command.Info:
 		return e.executeInfo(typedCommand)
+	case command.Wait:
+		return e.executeWait(typedCommand)
 	case command.Get:
 		return e.executeGet(typedCommand)
 	case command.Set:
@@ -73,6 +75,45 @@ func (e commandExecutor) executeEcho(echo command.Echo) error {
 
 	if _, err := e.conn.WriteString(resStr); err != nil {
 		return fmt.Errorf("error writing reponse to ECHO command to client: %w", err)
+	}
+	return nil
+}
+
+// TODO: Testing once fn returns are a bit more stable
+func (e commandExecutor) executeInfo(info command.Info) error {
+	serverInfo, err := GetServerInfo(e.server, info.Payload)
+	if err != nil {
+		return fmt.Errorf("error getting server info: %w", err)
+	}
+
+	// Sort and join info with new lines
+	infoToEncode := make([]string, 0, len(serverInfo))
+	for key, val := range serverInfo {
+		infoToEncode = append(infoToEncode, fmt.Sprintf("%s:%s\n", key, val))
+	}
+	slices.Sort(infoToEncode)
+
+	encoder := command.Encoder{UseBulkStrings: true}
+	res, err := encoder.Encode(strings.Join(infoToEncode, ""))
+	if err != nil {
+		return fmt.Errorf("error encoding response for INFO command: %w", err)
+	}
+
+	if _, err := e.conn.WriteString(res); err != nil {
+		return fmt.Errorf("error writing reponse to INFO command to client: %w", err)
+	}
+
+	return nil
+}
+
+func (e commandExecutor) executeWait(_ command.Wait) error {
+	waitRes, err := command.Encoder{}.EncodePrimitive(0)
+	if err != nil {
+		return fmt.Errorf("failed to encode response to wait command: %w", err)
+	}
+
+	if _, err := e.conn.WriteString(waitRes); err != nil {
+		return fmt.Errorf("error writing reponse to WAIT command to client: %w", err)
 	}
 	return nil
 }
@@ -106,33 +147,6 @@ func (e commandExecutor) executeSet(set command.Set) error {
 	return nil
 }
 
-// TODO: Testing once fn returns are a bit more stable
-func (e commandExecutor) executeInfo(info command.Info) error {
-	serverInfo, err := GetServerInfo(e.server, info.Payload)
-	if err != nil {
-		return fmt.Errorf("error getting server info: %w", err)
-	}
-
-	// Sort and join info with new lines
-	infoToEncode := make([]string, 0, len(serverInfo))
-	for key, val := range serverInfo {
-		infoToEncode = append(infoToEncode, fmt.Sprintf("%s:%s\n", key, val))
-	}
-	slices.Sort(infoToEncode)
-
-	encoder := command.Encoder{UseBulkStrings: true}
-	res, err := encoder.Encode(strings.Join(infoToEncode, ""))
-	if err != nil {
-		return fmt.Errorf("error encoding response for INFO command: %w", err)
-	}
-
-	if _, err := e.conn.WriteString(res); err != nil {
-		return fmt.Errorf("error writing reponse to INFO command to client: %w", err)
-	}
-
-	return nil
-}
-
 func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 	nodeType := e.server.NodeType()
 	switch typedServer := e.server.(type) {
@@ -153,7 +167,11 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 		}
 	case *ReplicaServer:
 		if replConf.IsGetAck() {
-			res, err := command.Encoder{}.EncodeArray([]any{"REPLCONF", "ACK", strconv.FormatInt(typedServer.bytesProcessed, 10)})
+			res, err := command.Encoder{}.EncodeArray([]any{
+				string(command.ReplConfCmd),
+				"ACK",
+				strconv.FormatInt(typedServer.bytesProcessed, 10),
+			})
 			if err != nil {
 				return fmt.Errorf("error encoding response for REPLCONF ACK command: %w", err)
 			}

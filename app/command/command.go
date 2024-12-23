@@ -21,6 +21,7 @@ const (
 	PingCmd     CommandType = "ping"
 	EchoCmd     CommandType = "echo"
 	InfoCmd     CommandType = "info"
+	WaitCmd     CommandType = "wait"
 	SetCmd      CommandType = "set"
 	GetCmd      CommandType = "get"
 	ReplConfCmd CommandType = "replconf"
@@ -48,6 +49,8 @@ func ToCommand(data []any) (Command, error) {
 		return toEcho(cmdData)
 	case InfoCmd:
 		return toInfo(cmdData)
+	case WaitCmd:
+		return toWait(cmdData)
 	case GetCmd:
 		return toGet(cmdData)
 	case SetCmd:

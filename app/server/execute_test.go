@@ -110,6 +110,33 @@ func TestExecuteEcho(t *testing.T) {
 	}
 }
 
+func TestExecuteInfo(t *testing.T) {
+	runCommandAndCheckOutput(
+		t,
+		command.Info{Payload: "replication"},
+		"$88\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:master\n\r\n",
+	)
+}
+
+func TestExecuteWait(t *testing.T) {
+	for _, tc := range []struct {
+		numReplicas int64
+		waitTimeMs  int64
+	}{
+		{
+			numReplicas: 10,
+			waitTimeMs:  20,
+		},
+
+		{
+			numReplicas: 0,
+			waitTimeMs:  0,
+		},
+	} {
+		runCommandAndCheckOutput(t, command.Wait{NumReplicas: tc.numReplicas, WaitForMs: tc.waitTimeMs}, ":0\r\n")
+	}
+}
+
 func TestExecuteGet(t *testing.T) {
 	for _, tc := range []struct {
 		inputKey                string
@@ -245,14 +272,6 @@ func TestExecuteReplConf(t *testing.T) {
 	}
 }
 
-func TestExecuteInfo(t *testing.T) {
-	runCommandAndCheckOutput(
-		t,
-		command.Info{Payload: "replication"},
-		"$88\r\nmaster_repl_offset:0\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nrole:master\n\r\n",
-	)
-}
-
 func TestExecutePSync(t *testing.T) {
 	runCommandAndCheckOutputs(
 		t,
@@ -260,45 +279,3 @@ func TestExecutePSync(t *testing.T) {
 		[]string{"+FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0\r\n", fmt.Sprintf("$88\r\n%s", command.GetHardedCodedEmptyRDBBytes())},
 	)
 }
-
-// TODO: Fix these once info has a stable return value
-// func TestExecuteInfo(t *testing.T) {
-// 	for _, tc := range []struct {
-// 		inputServer  Server
-// 		expectedInfo string
-// 	}{
-// 		{
-// 			inputServer: &BaseServer{
-// 				logger: log.NewNoOpLogger(),
-// 			},
-// 			expectedInfo: "",
-// 		},
-// 		{
-// 			inputServer: &MasterServer{
-// 				BaseServer: BaseServer{
-// 					logger: log.NewNoOpLogger(),
-// 				},
-// 			},
-// 			expectedInfo: "",
-// 		},
-// 		{
-// 			inputServer: &ReplicaServer{
-// 				BaseServer: BaseServer{
-// 					logger: log.NewNoOpLogger(),
-// 				},
-// 				masterAddress: "localhost:123",
-// 			},
-// 			expectedInfo: "",
-// 		},
-// 	} {
-// 		t.Run(fmt.Sprintf("executing INFO on a server of type %T should return the expected value", tc.inputServer), func(t *testing.T) {
-// 			res, err := executeInfo(tc.inputServer, command.Info{
-// 				Payload: "replication",
-// 			})
-// 			assert.Nil(t, err)
-// 			assert.Equal(t, tc.expectedInfo, res)
-// 		})
-// 	}
-// }
-
-// TODO: Looped tests for replica vs master with expected behavior
