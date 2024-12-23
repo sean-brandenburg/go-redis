@@ -168,7 +168,7 @@ func (e commandExecutor) executeReplConf(replConf command.ReplConf) error {
 	case *ReplicaServer:
 		if replConf.IsGetAck() {
 			res, err := command.Encoder{}.EncodeArray([]any{
-				string(command.ReplConfCmd),
+				"REPLCONF",
 				"ACK",
 				strconv.FormatInt(typedServer.bytesProcessed, 10),
 			})
