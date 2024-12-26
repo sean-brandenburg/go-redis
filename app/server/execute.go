@@ -107,15 +107,20 @@ func (e commandExecutor) executeInfo(info command.Info) error {
 }
 
 func (e commandExecutor) executeWait(_ command.Wait) error {
-	waitRes, err := command.Encoder{}.EncodePrimitive(0)
-	if err != nil {
-		return fmt.Errorf("failed to encode response to wait command: %w", err)
-	}
+	switch typedServer := e.server.(type) {
+	case *MasterServer:
+		waitRes, err := command.Encoder{}.EncodePrimitive(len(typedServer.registeredReplicaConns))
+		if err != nil {
+			return fmt.Errorf("failed to encode response to wait command: %w", err)
+		}
 
-	if _, err := e.conn.WriteString(waitRes); err != nil {
-		return fmt.Errorf("error writing reponse to WAIT command to client: %w", err)
+		if _, err := e.conn.WriteString(waitRes); err != nil {
+			return fmt.Errorf("error writing reponse to WAIT command to client: %w", err)
+		}
+		return nil
+	case *ReplicaServer:
 	}
-	return nil
+	return errors.New("server was an invalid type while processing wait command")
 }
 
 func (e commandExecutor) executeGet(get command.Get) error {
